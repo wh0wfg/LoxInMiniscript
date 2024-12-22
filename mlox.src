@@ -2,12 +2,15 @@
 TokenType = {
 "LEFT_PAREN": "LEFT_PAREN",
 "RIGHT_PAREN": "RIGHT_PAREN",
+"LEFT_SQUARE": "LEFT_SQUARE",
+"RIGHT_SQUARE": "RIGHT_SQUARE",
 "LEFT_BRACE": "LEFT_BRACE",
 "RIGHT_BRACE": "RIGHT_BRACE",
 "COMMA": "COMMA",
 "DOT": "DOT",
 "MINUS": "MINUS",
 "PLUS": "PLUS",
+"COLON": "COLON",
 "SEMICOLON": "SEMICOLON",
 "SLASH": "SLASH",
 "STAR": "STAR",
@@ -170,6 +173,10 @@ ScanToken = function(scanner)
         AddToken(@scanner, @TokenType.LEFT_PAREN)
     else if @c == ")" then
         AddToken(@scanner, @TokenType.RIGHT_PAREN)
+    else if @c == "[" then
+        AddToken(@scanner, @TokenType.LEFT_SQUARE)
+    else if @c == "]" then
+        AddToken(@scanner, @TokenType.RIGHT_SQUARE)
     else if @c == "{" then
         AddToken(@scanner, @TokenType.LEFT_BRACE)
     else if @c == "}" then
@@ -182,6 +189,8 @@ ScanToken = function(scanner)
         AddToken(@scanner, @TokenType.MINUS)
     else if @c == "+" then
         AddToken(@scanner, @TokenType.PLUS)
+    else if @c == ":" then
+        AddToken(@scanner, @TokenType.COLON)
     else if @c == ";" then
         AddToken(@scanner, @TokenType.SEMICOLON)
     else if @c == "*" then
