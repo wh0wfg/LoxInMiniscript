@@ -2,9 +2,16 @@
 Lox interpreter written entirely in Miniscript.
 
 Since the performance of maps in miniscript is low, most objects are represented by list.
+
+The main branch only implemented official lox standard.
+
+To use extended features, such as list and map, check out the [extended](https://github.com/wh0wfg/LoxInMiniscript/tree/extended) branch.
+
+For features based on greyscript extensions, check out the [greyscript-extended](https://github.com/wh0wfg/LoxInMiniscript.git) branch.
+
 ## **Benchmarks**
 
-**Note**: Benchmark parameters differ from official tests. 
+**Note**: Benchmark parameters differ from official tests.
 
 ### **Binary Trees**
 | Parameter       | Value   |
