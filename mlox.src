@@ -330,6 +330,16 @@ end function
 NewVariableExpr = function(_name)
     return ["Variable", @_name, rnd]
 end function
+// list
+// @values      expr[1] Expr[]
+NewListExpr = function(_values)
+    return ["List", @_values, rnd]
+end function
+// map
+// @values      expr[1] Map
+NewMapExpr = function(_values)
+    return ["Map", @_values, rnd]
+end function
 // parser
 // @tokens      parser[0]
 // @current     parser[1]
@@ -803,6 +813,59 @@ ParserPrimary = function(parser)
         throw = ParserConsume(@parser, @TokenType.RIGHT_PAREN, "Expect ')' after expression.")
         if @throw isa @RuntimeException then return throw
         return NewGroupingExpr(@expr)
+    end if
+
+    // parse list
+    if ParserMatch(@parser, [@TokenType.LEFT_SQUARE]) then
+        _values = []
+        if not ParserCheck(@parser, @TokenType.RIGHT_SQUARE) then
+            // do-while
+            expr = ParserExpression(@parser)
+            if @expr isa @RuntimeException then return @expr
+            _values.push(@expr)
+            while ParserMatch(@parser, [@TokenType.COMMA])
+                // optional end ','
+                if ParserCheck(@parser, @TokenType.RIGHT_SQUARE) then break
+
+                expr = ParserExpression(@parser)
+                if @expr isa @RuntimeException then return @expr
+                _values.push(@expr)
+            end while
+        end if
+
+        throw = ParserConsume(@parser, @TokenType.RIGHT_SQUARE, "Expect ']' after list.")
+        if @throw isa @RuntimeException then return @throw
+        return NewListExpr(@_values)
+    end if
+
+    // parse map
+    if ParserMatch(@parser, [@TokenType.LEFT_BRACE]) then
+        _values = {}
+        if not ParserCheck(@parser, @TokenType.RIGHT_BRACE) then
+            // do-while
+            key = ParserExpression(@parser)
+            if @key isa @RuntimeException then return @key
+            throw = ParserConsume(@parser, @TokenType.COLON, "Expect ':' after map key.")
+            if @throw isa @RuntimeException then return @throw
+            value = ParserExpression(@parser)
+            if @value isa @RuntimeException then return @value
+            _values[@key] = @value
+            while ParserMatch(@parser, [@TokenType.COMMA])
+                // optional end ','
+                if ParserCheck(@parser, @TokenType.RIGHT_BRACE) then break
+                key = ParserExpression(@parser)
+                if @key isa @RuntimeException then return @key
+                throw = ParserConsume(@parser, @TokenType.COLON, "Expect ':' after map key.")
+                if @throw isa @RuntimeException then return @throw
+                value = ParserExpression(@parser)
+                if @value isa @RuntimeException then return @value
+                _values[@key] = @value
+            end while
+        end if
+
+        throw = ParserConsume(@parser, @TokenType.RIGHT_BRACE, "Expect '}' after map.")
+        if @throw isa @RuntimeException then return @throw
+        return NewMapExpr(@_values)
     end if
 
     return ParserError(ParserPeek(@parser), "Expect expression.")
@@ -2020,4 +2083,4 @@ IntrpUnitTests = function
     ]
     runSource(whileloop.join(char(10)))
 end function
-IntrpUnitTests()
+runPrompt()
