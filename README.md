@@ -1,5 +1,22 @@
 # Mlox Extended
 
+If the function name is XXXDoSomething, you will most likely need to pass in an instance of XXX.
+
+eg: 
+```lua
+IntrpResolve(intrp, xxx, xxx)
+```
+
+Since most of objects are list, you have to use index to access their member.
+
+The index of each memeber is defined at NewXXXX,
+
+eg: 
+```
+a = NewInterpreter
+a[0] // namely a.globals
+```
+
 ## Add Custom Intrinsic
 ```lua
 clockIntrinsic = function(intrp, arguments)
@@ -12,8 +29,66 @@ AddIntrinsic takes three arguments
 - arity: number of arguments
 - callable: function to call, must accept 2 parameters.
 
-**intrp**: Lox Interpreter (usually you don't need to use this)
+**intrp**: Lox Interpreter
 **argumments**: List of arguments
+
+Here are possible types of each arugment:
+
+| Type in Lox | Type in Miniscript |
+| ----------- | -------            |
+| string      | string             |
+| number      | number             |
+| nil         | null               |
+| bool        | number             |
+| Class       | list from NewLoxClass   |
+| Instance    | list from NewLoxInstance|
+| Function    | list from NewLoxFunction|
+
+| Extended Type | Type in Miniscript |
+| -----------   | -------            |
+| Intrinsic     | list from  AddIntrinsic|
+| List          | work in progress       |
+| Map           | work in progress       |
+
+For simple lox type variables (string, number ....), you can simply treat them as normal miniscript type.
+
+But you have to use intrp to deal with other type.
+
+
+Define intrinsic function below will not work properly.
+
+```lua
+class = [
+    "class Animal {",
+    "  init(name) {",
+    "    this.name = name;",
+    "  }",
+    "  speak() {",
+    "    print this.name + "" makes a noise."";",
+    "  }",
+    "}",
+    "var myAnimal = Animal(""Generic Animal"");",
+    "myAnimal.speak();",
+    "rename(myAnimal, ""dog"")",
+]
+renameIntrinsic = function(intrp, arguments)
+    // Invalid!
+    arguments[0].name = arguments[1]
+
+    // arguments[0] looks like  "[""LoxInstance"", [""Animal"", ..., ...] , ....]"
+    // but arguments[1] is indeed a miniscript string: "dog"
+end function
+AddIntrinsic("rename", 2, @feedIntrinsic)
+runSource(fib.join(char(10)))
+```
+In order to properly handle it, you can use LoxInstanceSet(intrp, "name", arguments[1]).
+
+Here are some more functions you might want to use:
+
+- LoxInstanceGet
+- LoxClassFindMethod
+- LoxFunctionBind
+- LoxCallableCall
 
 ## REPL
 Call runPrompt()
@@ -40,8 +115,8 @@ fib = [
 runSource(fib.join(char(10)))
 ```
 
-## Create Lox Interpreter
+## Create a Lox Interpreter
 NOTE: interpreter is already exists in the global.
 ```lua
-interpreter = NewInterpreter()
+interpreter2 = NewInterpreter()
 ```
