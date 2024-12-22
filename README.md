@@ -18,6 +18,18 @@ original: **0.971s**
 
 tail call optimized: **0.521s**
 
+### else-if
+```C#
+        "var x = 3;",
+        "if (x == 0) {",
+        "  print ""x is 0"";",
+        "} else if (x == 1) {",
+        "  print ""x is 1"";",
+        "} else {",
+        "  print ""x is not 0 or 1"";",
+        "}",
+```
+
 ### foreach statement
 ```C#
 var l = [1,2,3,4];
