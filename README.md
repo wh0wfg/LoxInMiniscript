@@ -52,8 +52,7 @@ Here are possible types of each arugment:
 
 For simple lox type variables (string, number ....), you can simply treat them as normal miniscript type.
 
-But you have to use intrp to deal with other type.
-
+Under most situations, you will not use intrp.
 
 Define intrinsic function below will not work properly.
 
