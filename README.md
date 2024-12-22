@@ -17,6 +17,15 @@ runSource(tailCall.join(char(10)))
 Original: **0.971s**
 
 TailCall Optimized: **0.521s**
+
+### foreach statement
+```C#
+var l = [1,2,3,4];
+foreach (var i in l) {
+    print i;
+}
+```
+
 ### list expression
 ```js
 var l = [1,2,3,4];

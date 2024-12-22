@@ -30,6 +30,8 @@ TokenType = {
 "ELSE": "ELSE",
 "FALSE": "FALSE",
 "FUN": "FUN",
+"FOREACH": "FOREACH",
+"IN": "IN",
 "FOR": "FOR",
 "IF": "IF",
 "NIL": "NIL",
@@ -48,6 +50,8 @@ keywords = {
     "class": TokenType.CLASS,
     "else": TokenType.ELSE,
     "false": TokenType.FALSE,
+    "foreach": TokenType.FOREACH,
+    "in": TokenType.IN,
     "for": TokenType.FOR,
     "fun": TokenType.FUN,
     "if": TokenType.IF,
@@ -451,6 +455,7 @@ ParserClassDeclaration = function(parser)
 end function
 // @throwable
 ParserStatement = function(parser)
+    if ParserMatch(@parser, [@TokenType.FOREACH]) then return ParserForeachStatement(@parser)
     if ParserMatch(@parser, [@TokenType.FOR]) then return ParserForStatement(@parser)
     if ParserMatch(@parser, [@TokenType.IF]) then return ParserIfStatement(@parser)
     if ParserMatch(@parser, [@TokenType.PRINT]) then return ParserPrintStatement(@parser)
@@ -462,6 +467,31 @@ ParserStatement = function(parser)
         return NewBlockStmt(@throw)
     end if
     return ParserExpressionStatement(@parser)
+end function
+// @throwable
+ParserForeachStatement = function(parser)
+    throw = ParserConsume(@parser, @TokenType.LEFT_PAREN, "Expect '(' after 'foreach'.")
+    if @throw isa @RuntimeException then return @throw
+    
+    _throw = ParserConsume(@parser, @TokenType.VAR, "Expect 'var' after 'foreach'.")
+    if @_throw isa @RuntimeException then return @_throw
+
+    _name = ParserConsume(@parser, @TokenType.IDENTIFIER, "Expect variable name.")
+    if @_name isa @RuntimeException then return @_name
+
+    throw = ParserConsume(@parser, @TokenType.IN, "Expect 'in' after variable name.")
+    if @throw isa @RuntimeException then return @throw
+
+    iterable = ParserExpression(@parser)
+    if @iterable isa @RuntimeException then return @iterable
+
+    throw = ParserConsume(@parser, @TokenType.RIGHT_PAREN, "Expect ')' after foreach clauses.")
+    if @throw isa @RuntimeException then return @throw
+
+    body = ParserStatement(@parser)
+    if @body isa @RuntimeException then return @body
+
+    return NewForeachStmt(@_name, @iterable, @body)
 end function
 // @throwable
 ParserForStatement = function(parser)
@@ -994,6 +1024,7 @@ StmtAccept = function(stmt, visitor)
     if @stmt[0] == "Print" then return VisitorVisitPrintStmt(@visitor, @stmt)
     if @stmt[0] == "Return" then return VisitorVisitReturnStmt(@visitor, @stmt)
     if @stmt[0] == "Var" then return VisitorVisitVarStmt(@visitor, @stmt)
+    if @stmt[0] == "Foreach" then return VisitorVisitForeachStmt(@visitor, @stmt)
     if @stmt[0] == "While" then return VisitorVisitWhileStmt(@visitor, @stmt)
 end function
 // block
@@ -1044,6 +1075,13 @@ end function
 // @initializer stmt[2] Expr
 NewVarStmt = function(_name, initializer)
     return ["Var", @_name, @initializer, rnd]
+end function
+// foreach
+// @name        stmt[1] Token
+// @iterable    stmt[2] Expr
+// @body        stmt[3] Stmt
+NewForeachStmt = function(_name, iterable, body)
+    return ["Foreach", @_name, @iterable, @body, rnd]
 end function
 // while
 // @condition   stmt[1] Expr
@@ -1114,6 +1152,14 @@ VisitorVisitVarStmt = function(visitor, stmt)
         return IntrpVisitVarStmt(@visitor, @stmt)
     else if @visitor[-1] == "Resolver" then
         return ResolverVisitVarStmt(@visitor, @stmt)
+    end if
+end function
+// @throwable
+VisitorVisitForeachStmt = function(visitor, stmt)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitForeachStmt(@visitor, @stmt)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitForeachStmt(@visitor, @stmt)
     end if
 end function
 // @throwable
@@ -1384,6 +1430,17 @@ ResolverVisitVarStmt = function(resolver, stmt)
         if @throw isa @RuntimeException then return @throw
     end if
     ResolverDefine(@resolver, @stmt[1])
+end function
+// @throwable
+ResolverVisitForeachStmt = function(resolver, stmt)
+    ResolverDeclare(@resolver, @stmt[1])
+    ResolverDefine(@resolver, @stmt[1])
+    throw = ResolverResolveExpr(@resolver, @stmt[2])
+    if @throw isa @RuntimeException then return @throw
+    ResolverBeginScope(@resolver)
+    throw = ResolverResolveStmt(@resolver, @stmt[3])
+    if @throw isa @RuntimeException then return @throw
+    ResolverEndScope(@resolver)
 end function
 // @throwable
 ResolverVisitWhileStmt = function(resolver, stmt)
@@ -1978,6 +2035,7 @@ IntrpVisitReturnStmt = function(intrp, stmt)
     end if
     return NewReturn(@value)
 end function
+// @throwable
 IntrpVisitVarStmt = function(intrp, stmt)
     value = null
     if @stmt[2] != null then
@@ -1987,12 +2045,42 @@ IntrpVisitVarStmt = function(intrp, stmt)
 
     EnvironmentDefine(@intrp[1], @stmt[1][1], @value)
 end function
+// @throwable
+IntrpVisitForeachStmt = function(intrp, stmt)
+    iterable = IntrpEvaluate(@intrp, @stmt[2])
+    if @iterable isa @RuntimeException then return @iterable
+
+    if @iterable isa string then
+        for value in @iterable
+            EnvironmentDefine(@intrp[1], @stmt[1][1], @value)
+            throw = IntrpExecute(@intrp, @stmt[3])
+            if @throw isa @RuntimeException then return @throw
+        end for
+    else if @iterable[0] == "LoxList" then
+        for value in @iterable[1]
+            EnvironmentDefine(@intrp[1], @stmt[1][1], @value)
+            throw = IntrpExecute(@intrp, @stmt[3])
+            if @throw isa @RuntimeException then return @throw
+        end for
+    else if @iterable[0] == "LoxMap" then
+        for key in iterable[1].indexes
+            // for key:value pair
+            EnvironmentDefine(@intrp[1], @stmt[1][1], NewMapExpr({"key": @key, "value": @iterable[1][@key]}))
+            throw = IntrpExecute(@intrp, @stmt[3])
+            if @throw isa @RuntimeException then return @throw
+        end for
+    else
+        return NewRuntimeError(@stmt[2][1], "Unsupported iterable type " + @iterable[0] + ".")
+    end if
+end function
+// @throwable
 IntrpVisitWhileStmt = function(intrp, stmt)
     while IntrpIsTruthy(IntrpEvaluate(@intrp, @stmt[1]))
         throw = IntrpExecute(@intrp, @stmt[2])
         if @throw isa @RuntimeException then return @throw
     end while
 end function
+// @throwable
 IntrpVisitAssignExpr = function(intrp, expr)
     value = IntrpEvaluate(@intrp, @expr[2])
     if @value isa @RuntimeException then return @value
@@ -2456,15 +2544,21 @@ IntrpUnitTests = function
         "print fib(1);",
         "print clock() - s;",
     ]
-    tallCall = [
-        "fun f(n) {",
-        "  if (n <= 1) return n;",
-        "  return f(n - 1);",
+    tailCall = [
+        "fun f(n, acc) {",
+        "  if (n <= 1) return acc;",
+        "  return f(n - 1, acc + 1);",
         "}",
         "var s = clock();",
-        "print f(1000);",
+        "print f(1000, 0);",
         "print clock() - s;",
     ]
-    runSource(tallCall.join(char(10)))
+    foreach = [
+        "var l = [1, 2, 3, 4, 5];",
+        "foreach (var i in l) {",
+        "  print i;",
+        "}",
+    ]
+    runSource(foreach.join(char(10)))
 end function
 IntrpUnitTests
