@@ -1,119 +1,47 @@
-# Readme
-Lox interpreter written entirely in Miniscript.
+# Mlox Extended
 
-Since the performance of maps in miniscript is low, most objects are represented by list.
-## **Benchmarks**
+## Add Custom Intrinsic
+```lua
+clockIntrinsic = function(intrp, arguments)
+    return time
+end function
+AddIntrinsic("clock", 0, @clockIntrinsic)
+```
+AddIntrinsic takes three arguments
+- name: intrinsic function name 
+- arity: number of arguments
+- callable: function to call, must accept 2 parameters.
 
-**Note**: Benchmark parameters differ from official tests. 
+**intrp**: Lox Interpreter (usually you don't need to use this)
+**argumments**: List of arguments
 
-### **Binary Trees**
-| Parameter       | Value   |
-|-----------------|---------|
-| Min Depth       | 2       |
-| Max Depth       | 4       |
+## REPL
+Call runPrompt()
 
-**Results**:
-- Stretch tree of depth 8: **-1**
-- Long-lived tree of depth 7: **-1**
-- Elapsed: **7.798s**
+## Run Source
+Call runSource(source)
 
----
+source is the string representation of the code.
 
-### **Equality**
-| Parameter       | Value   |
-|-----------------|---------|
-| While Times     | 100     |
+NOTE: you can not use "\n", because it is actually 2 chars in miniscript.
 
-**Results**:
-- Loop: **0.111s**
-- Elapsed: **1.202s**
-- Equals: **1.091s**
+You have to use char(10) instead.
+```lua
+fib = [
+    "fun fib(n) {",
+    "  if (n <= 1) return n;",
+    "  return fib(n - 2) + fib(n - 1);",
+    "}",
+    " ",
+    "var start = clock();",
+    "print fib(15) == 610;",
+    "print clock() - start;",
+]
+runSource(fib.join(char(10)))
+```
 
----
-
-### **Fibonacci**
-| Parameter       | Value   |
-|-----------------|---------|
-| Fibonacci Number| 15      |
-
-**Results**:
-- Elapsed: **0.596s**
-
----
-
-### **Instantiation**
-| Parameter       | Value   |
-|-----------------|---------|
-| While Times     | 100     |
-
-**Results**:
-- Elapsed: **0.388s**
-
----
-
-### **Method Call**
-| Parameter       | Value   |
-|-----------------|---------|
-| While Times     | 100     |
-
-**Results**:
-- Elapsed: **1.345s**
-
----
-
-### **String Equality**
-| Parameter       | Value   |
-|-----------------|---------|
-| While Times     | 100     |
-
-**Results**:
-- Elapsed: **0.589s**
-
----
-
-### **Trees**
-| Parameter       | Value   |
-|-----------------|---------|
-| Tree Depth      | 4       |
-| No For Loop     | True    |
-
-**Results**:
-- Elapsed: **0.232s**
-
----
-
-### **Zoo**
-| Parameter       | Value   |
-|-----------------|---------|
-| While Times     | 100     |
-
-**Results**:
-- Elapsed: **0.024s**
-
----
-
-### **Zoo Batch**
-| Parameter       | Value   |
-|-----------------|---------|
-| While Limit     | 1       |
-| For Times       | 100     |
-
-**Results**:
-- Batches: **4200**
-- Elapsed: **1.069s**
-
----
-
-## **System Specifications**
-Benchmarks were run on the following machine:
-- **CPU**: AMD Ryzen 9 5900HX
-- **RAM**: 64 GiB
-- **OS**: Windows 10
-- **Miniscript Interpreter**: [MiniScript](https://github.com/JoeStrout/miniscript)
-
----
-
-## **References**
-- [Crafting Interpreters](https://craftinginterpreters.com/)
-- [jlox](https://github.com/geertguldentops/jlox)
-- [MiniScript](https://github.com/JoeStrout/miniscript)
+## Create Lox Interpreter
+NOTE: interpreter is already exists in the global.
+```lua
+interpreter = NewInterpreter()
+```
