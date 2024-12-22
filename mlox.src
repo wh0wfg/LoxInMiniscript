@@ -251,6 +251,8 @@ ExprAccept = function(expr, visitor)
     if case == "Get" then return VisitorVisitGetExpr(@visitor, @expr)
     if case == "Grouping" then return VisitorVisitGroupingExpr(@visitor, @expr)
     if case == "Literal" then return VisitorVisitLiteralExpr(@visitor, @expr)
+    if case == "List" then return VisitorVisitListExpr(@visitor, @expr)
+    if case == "Map" then return VisitorVisitMapExpr(@visitor, @expr)
     if case == "Logical" then return VisitorVisitLogicalExpr(@visitor, @expr)
     if case == "Set" then return VisitorVisitSetExpr(@visitor, @expr)
     if case == "Super" then return VisitorVisitSuperExpr(@visitor, @expr)
@@ -1105,6 +1107,22 @@ VisitorVisitLiteralExpr = function(visitor, expr)
     end if
 end function
 // @throwable
+VisitorVisitListExpr = function(visitor, expr)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitListExpr(@visitor, @expr)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitListExpr(@visitor, @expr)
+    end if
+end function
+// @throwable
+VisitorVisitMapExpr = function(visitor, expr)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitMapExpr(@visitor, @expr)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitMapExpr(@visitor, @expr)
+    end if
+end function
+// @throwable
 VisitorVisitLogicalExpr = function(visitor, expr)
     if @visitor[-1] == "Interpreter" then
         return IntrpVisitLogicalExpr(@visitor, @expr)
@@ -1318,6 +1336,22 @@ ResolverVisitGroupingExpr = function(resolver, expr)
 end function
 ResolverVisitLiteralExpr = function(resolver, expr)
     // do nothing
+end function
+// @throwable
+ResolverVisitListExpr = function(resolver, expr)
+    for value in @expr[1]
+        throw = ResolverResolveExpr(@resolver, @value)
+        if @throw isa @RuntimeException then return @throw
+    end for
+end function
+// @throwable
+ResolverVisitMapExpr = function(resolver, expr)
+    for key in @expr[1].indexes
+        throw = ResolverResolveExpr(@resolver, @key)
+        if @throw isa @RuntimeException then return @throw
+        throw = ResolverResolveExpr(@resolver, @expr[1][@key])
+        if @throw isa @RuntimeException then return @throw
+    end for
 end function
 // @throwable
 ResolverVisitLogicalExpr = function(resolver, expr)
@@ -1853,6 +1887,30 @@ IntrpVisitGroupingExpr = function(intrp, expr)
 end function
 IntrpVisitLiteralExpr = function(intrp, expr)
     return @expr[1]
+end function
+// @throwable
+IntrpVisitListExpr = function(intrp, expr)
+    _values = []
+    for value in @expr[1]
+        value = IntrpEvaluate(@intrp, @value)
+        if @value isa @RuntimeException then return @value
+        _values.push(@value)
+    end for
+    return @_values
+end function
+// @throwable
+IntrpVisitMapExpr = function(intrp, expr)
+    map = {}
+    for key in expr[1].indexes
+        value = @expr[1][@key]
+
+        key = IntrpEvaluate(@intrp, @key)
+        if @key isa @RuntimeException then return @key
+        value = IntrpEvaluate(@intrp, value)
+        if @value isa @RuntimeException then return @value
+        map[@key] = @value
+    end for
+    return @map
 end function
 // @throwable
 IntrpVisitLogicalExpr = function(intrp, expr)
