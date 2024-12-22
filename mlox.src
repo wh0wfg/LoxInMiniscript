@@ -1,0 +1,2542 @@
+// scanner
+TokenType = {
+"LEFT_PAREN": "LEFT_PAREN",
+"RIGHT_PAREN": "RIGHT_PAREN",
+"LEFT_BRACE": "LEFT_BRACE",
+"RIGHT_BRACE": "RIGHT_BRACE",
+"COMMA": "COMMA",
+"DOT": "DOT",
+"MINUS": "MINUS",
+"PLUS": "PLUS",
+"SEMICOLON": "SEMICOLON",
+"SLASH": "SLASH",
+"STAR": "STAR",
+"BANG": "BANG",
+"BANG_EQUAL": "BANG_EQUAL",
+"EQUAL": "EQUAL",
+"EQUAL_EQUAL": "EQUAL_EQUAL",
+"GREATER": "GREATER",
+"GREATER_EQUAL": "GREATER_EQUAL",
+"LESS": "LESS",
+"LESS_EQUAL": "LESS_EQUAL",
+"IDENTIFIER": "IDENTIFIER",
+"STRING": "STRING",
+"NUMBER": "NUMBER",
+"AND": "AND",
+"CLASS": "CLASS",
+"ELSE": "ELSE",
+"FALSE": "FALSE",
+"FUN": "FUN",
+"FOR": "FOR",
+"IF": "IF",
+"NIL": "NIL",
+"OR": "OR",
+"PRINT": "PRINT",
+"RETURN": "RETURN",
+"SUPER": "SUPER",
+"THIS": "THIS",
+"TRUE": "TRUE",
+"VAR": "VAR",
+"WHILE": "WHILE",
+"EOF": "EOF",
+}
+keywords = {
+    "and": TokenType.AND,
+    "class": TokenType.CLASS,
+    "else": TokenType.ELSE,
+    "false": TokenType.FALSE,
+    "for": TokenType.FOR,
+    "fun": TokenType.FUN,
+    "if": TokenType.IF,
+    "nil": TokenType.NIL,
+    "or": TokenType.OR,
+    "print": TokenType.PRINT,
+    "return": TokenType.RETURN,
+    "super": TokenType.SUPER,
+    "this": TokenType.THIS,
+    "true": TokenType.TRUE,
+    "var": TokenType.VAR,
+    "while": TokenType.WHILE,
+}
+// @type        token[0]
+// @lexeme      token[1]
+// @literal     token[2]
+// @line        token[3]
+NewToken = function(type, lexeme, literal, line)
+    return [@type, @lexeme, @literal, @line, rnd]
+end function
+TokenToString = function(token)
+    if @token[2] == null then return @token[0] + " " + @token[1]
+    return @token[0] + " " + @token[1] + " " + @token[2]
+end function
+// @source          scanner[0]
+// @tokens          scanner[1]
+// @start           scanner[2]
+// @current         scanner[3]
+// @line            scanner[4]
+NewScanner = function(source)
+    return [@source, [], 0, 0, 1]
+end function
+ScannerIsAtEnd = function(scanner)
+    return @scanner[3] >= scanner[0].len
+end function
+ScanTokens = function(scanner)
+    while not ScannerIsAtEnd(@scanner)
+        scanner[2] = @scanner[3]
+        ScanToken(@scanner)
+    end while
+
+    scanner[1].push(NewToken(@TokenType.EOF, "", null, @scanner[4]))
+    return @scanner[1]
+end function
+ScannerAdvance = function(scanner)
+    c = scanner[0][@scanner[3]]
+    scanner[3] = @scanner[3] + 1
+    return @c
+end function
+AddToken = function(scanner, type, literal=null)
+    text = @scanner[0][@scanner[2]:@scanner[3]]
+    @scanner[1].push(NewToken(@type, @text, @literal, @scanner[4]))
+end function
+ScannerMatch = function(scanner, expected)
+    if ScannerIsAtEnd(@scanner) then return false
+    if @scanner[0][@scanner[3]] != @expected then return false
+
+    @scanner[3] = @scanner[3] + 1
+    return true
+end function
+ScannerPeek = function(scanner)
+    if ScannerIsAtEnd(@scanner) then return ""
+    return @scanner[0][@scanner[3]]
+end function
+ScannerString = function(scanner)
+    while ScannerPeek(@scanner) != """" and not ScannerIsAtEnd(@scanner)
+        if ScannerPeek(@scanner) == char(10) then @scanner[4] = @scanner[4] + 1
+        ScannerAdvance(@scanner)
+    end while    
+    if ScannerIsAtEnd(@scanner) then
+        Error(@scanner[4], "Unterminated string.")
+        return
+    end if
+
+    ScannerAdvance(@scanner)
+
+    value = @scanner[0][@scanner[2]+1:@scanner[3]-1]
+    AddToken(@scanner, @TokenType.STRING, @value)
+end function
+ScannerNumber = function(scanner)
+    while IsDigit(ScannerPeek(@scanner))
+        ScannerAdvance(@scanner)
+    end while
+
+    if ScannerPeek(@scanner) == "." and IsDigit(ScannerPeekNext(@scanner)) then
+        ScannerAdvance(@scanner)
+        while IsDigit(ScannerPeek(@scanner))
+            ScannerAdvance(@scanner)
+        end while
+    end if
+
+    AddToken(@scanner, @TokenType.NUMBER, scanner[0][@scanner[2]:@scanner[3]].val)
+end function
+ScannerIdentifier = function(scanner)
+    while IsAlphaNumeric(ScannerPeek(@scanner))
+        ScannerAdvance(@scanner)
+    end while
+
+    text = @scanner[0][@scanner[2]:@scanner[3]]
+    if keywords.hasIndex(@text) == false then
+        type = @TokenType.IDENTIFIER
+    else
+        type = keywords[@text]
+    end if
+    AddToken(@scanner, @type)
+end function
+ScannerPeekNext = function(scanner)
+    if @scanner[3] + 1 >= scanner[0].len then return ""
+    return @scanner[0][@scanner[3] + 1]
+end function
+IsAlpha = function(c)
+    return (@c >= "a" and @c <= "z") or (@c >= "A" and @c <= "Z") or @c == "_"
+end function
+IsAlphaNumeric = function(c)
+    return IsAlpha(@c) or IsDigit(@c)
+end function
+IsDigit = function(c)
+    return @c >= "0" and @c <= "9"
+end function
+ScanToken = function(scanner)
+    c = ScannerAdvance(@scanner)
+    if @c == "(" then
+        AddToken(@scanner, @TokenType.LEFT_PAREN)
+    else if @c == ")" then
+        AddToken(@scanner, @TokenType.RIGHT_PAREN)
+    else if @c == "{" then
+        AddToken(@scanner, @TokenType.LEFT_BRACE)
+    else if @c == "}" then
+        AddToken(@scanner, @TokenType.RIGHT_BRACE)
+    else if @c == "," then
+        AddToken(@scanner, @TokenType.COMMA)
+    else if @c == "." then
+        AddToken(@scanner, @TokenType.DOT)
+    else if @c == "-" then
+        AddToken(@scanner, @TokenType.MINUS)
+    else if @c == "+" then
+        AddToken(@scanner, @TokenType.PLUS)
+    else if @c == ";" then
+        AddToken(@scanner, @TokenType.SEMICOLON)
+    else if @c == "*" then
+        AddToken(@scanner, @TokenType.STAR)
+    else if @c == "!" then
+    if ScannerMatch(@scanner, "=") then
+        AddToken(@scanner, @TokenType.BANG_EQUAL)
+    else
+        AddToken(@scanner, @TokenType.BANG)
+    end if
+    else if @c == "=" then
+        if ScannerMatch(@scanner, "=") then
+            AddToken(@scanner, @TokenType.EQUAL_EQUAL)
+        else
+            AddToken(@scanner, @TokenType.EQUAL)
+        end if
+    else if @c == "<" then
+        if ScannerMatch(@scanner, "=") then
+            AddToken(@scanner, @TokenType.LESS_EQUAL)
+        else
+            AddToken(@scanner, @TokenType.LESS)
+        end if
+    else if @c == ">" then
+        if ScannerMatch(@scanner, "=") then
+            AddToken(@scanner, @TokenType.GREATER_EQUAL)
+        else
+            AddToken(@scanner, @TokenType.GREATER)
+        end if
+    else if @c == "/" then
+        if ScannerMatch(@scanner, "/") then
+            while ScannerPeek(@scanner) != char(10) and not ScannerIsAtEnd(@scanner)
+                ScannerAdvance(@scanner)
+            end while
+        else
+            AddToken(@scanner, @TokenType.SLASH)
+        end if
+    else if @c == " " or @c == char(13) or @c == char(9) then
+        // Ignore whitespace.
+    else if c == char(10) then
+        @scanner[4] = @scanner[4] + 1
+    else if c == """" then
+        ScannerString(@scanner)
+    else if IsDigit(@c) then
+        ScannerNumber(@scanner)
+    else if IsAlpha(@c) then
+        ScannerIdentifier(@scanner)
+    else
+        Error(@scanner[4], "Unexpected character.")
+    end if
+end function
+// expr
+// @throwable
+ExprAccept = function(expr, visitor)
+    case = @expr[0]
+    if case == "Assign" then return VisitorVisitAssignExpr(@visitor, @expr)
+    if case == "Binary" then return VisitorVisitBinaryExpr(@visitor, @expr)
+    if case == "Call" then return VisitorVisitCallExpr(@visitor, @expr)
+    if case == "Get" then return VisitorVisitGetExpr(@visitor, @expr)
+    if case == "Grouping" then return VisitorVisitGroupingExpr(@visitor, @expr)
+    if case == "Literal" then return VisitorVisitLiteralExpr(@visitor, @expr)
+    if case == "Logical" then return VisitorVisitLogicalExpr(@visitor, @expr)
+    if case == "Set" then return VisitorVisitSetExpr(@visitor, @expr)
+    if case == "Super" then return VisitorVisitSuperExpr(@visitor, @expr)
+    if case == "This" then return VisitorVisitThisExpr(@visitor, @expr)
+    if case == "Unary" then return VisitorVisitUnaryExpr(@visitor, @expr)
+    if case == "Variable" then return VisitorVisitVariableExpr(@visitor, @expr)
+end function
+// assign
+// @name        expr[1] Token
+// @value       expr[2] Expr
+NewAssignExpr = function(_name, value)
+    return ["Assign", @_name, @value, rnd]
+end function
+// binary
+// @left        expr[1] Expr
+// @operator    expr[2] Token
+// @right       expr[3] Expr
+NewBinaryExpr = function(left, operator, right)
+    return ["Binary", @left, @operator, @right, rnd]
+end function
+// call
+// @callee      expr[1] Expr
+// @paren       expr[2] Token
+// @arguments   expr[3] Expr[]
+NewCallExpr = function(callee, paren, arguments)
+    return ["Call", @callee, @paren, @arguments, rnd]
+end function
+// get
+// @object      expr[1] Expr
+// @name        expr[2] Token
+NewGetExpr = function(object, _name)
+    return ["Get", @object, @_name, rnd]
+end function
+// group
+// @expression  expr[1] Expr
+NewGroupingExpr = function(expression)
+    return ["Grouping", @expression, rnd]
+end function
+// literal
+// @value       expr[1] Object
+NewLiteralExpr = function(value)
+    return ["Literal", @value, rnd]
+end function
+// logical
+// @left        expr[1] Expr
+// @operator    expr[2] Token
+// @right       expr[3] Expr
+NewLogicalExpr = function(left, operator, right)
+    return ["Logical", @left, @operator, @right, rnd]
+end function
+// set
+// @object      expr[1] Expr
+// @name        expr[2] Token
+// @value       expr[3] Expr
+NewSetExpr = function(object, _name, value)
+    return ["Set", @object, @_name, @value, rnd]
+end function
+// super
+// @keyword    expr[1] Token
+// @method     expr[2] Token
+NewSuperExpr = function(keyword, method)
+    return ["Super", @keyword, @method, rnd]
+end function
+// this
+// @keyword    expr[1] Token
+NewThisExpr = function(keyword)
+    return ["This", @keyword, rnd]
+end function
+// unary
+// @operator    expr[1] Token
+// @right       expr[2] Expr
+NewUnaryExpr = function(operator, right)
+    return ["Unary", @operator, @right, rnd]
+end function
+// variable
+// @name        expr[1] Token
+NewVariableExpr = function(_name)
+    return ["Variable", @_name, rnd]
+end function
+// parser
+// @tokens      parser[0]
+// @current     parser[1]
+NewParser = function(tokens)
+    return [tokens, 0]
+end function
+// @throwable
+Parse = function(parser)
+    statements = []
+    while not ParserIsAtEnd(@parser)
+        statements.push(ParserDeclaration(@parser))
+    end while
+    return @statements
+end function
+ParserExpression = function(parser)
+    return ParserAssignment(@parser)
+end function
+// @catchable
+// @throwable
+ParserDeclaration = function(parser)
+    if ParserMatch(@parser, [@TokenType.CLASS]) then
+        throw = ParserClassDeclaration(@parser)
+        if @throw isa @ParseError then 
+            ParserSynchronize(@parser)
+            return null
+        else
+            return @throw
+        end if
+    end if
+    if ParserMatch(@parser, [@TokenType.FUN]) then
+        throw = ParserFunction(@parser, "function")
+        if @throw isa @ParseError then 
+            ParserSynchronize(@parser)
+            return null
+        else
+            return @throw
+        end if
+    end if
+    if ParserMatch(@parser, [@TokenType.VAR]) then
+        throw = ParserVarDeclaration(@parser)
+        if @throw isa @ParseError then 
+            ParserSynchronize(@parser)
+            return null
+        else
+            return @throw
+        end if
+    end if
+    throw = ParserStatement(@parser)
+    if @throw isa @ParseError then 
+        ParserSynchronize(@parser)
+        return null
+    else
+        return @throw
+    end if
+end function
+// @throwable
+ParserClassDeclaration = function(parser)
+    _name = ParserConsume(@parser, @TokenType.IDENTIFIER, "Expect class name.")
+    if @_name isa @RuntimeException then return @_name
+
+    superclass = null
+    if ParserMatch(@parser, [@TokenType.LESS]) then
+        throw = ParserConsume(@parser, @TokenType.IDENTIFIER, "Expect superclass name.")
+        if @throw isa @RuntimeException then return @throw
+        superclass = NewVariableExpr(ParserPrevious(@parser))
+    end if
+
+    throw = ParserConsume(@parser, @TokenType.LEFT_BRACE, "Expect '{' before class body.")
+    if @throw isa @RuntimeException then return @throw
+
+    methods = []
+    while not ParserCheck(@parser, @TokenType.RIGHT_BRACE) and not ParserIsAtEnd(@parser)
+        method = ParserFunction(@parser, "method")
+        if @method isa @RuntimeException then return @method
+        methods.push(@method)
+    end while
+
+    throw = ParserConsume(@parser, @TokenType.RIGHT_BRACE, "Expect '}' after class body.")
+    if @throw isa @RuntimeException then return @throw
+    return NewClassStmt(@_name, @superclass, @methods)
+end function
+// @throwable
+ParserStatement = function(parser)
+    if ParserMatch(@parser, [@TokenType.FOR]) then return ParserForStatement(@parser)
+    if ParserMatch(@parser, [@TokenType.IF]) then return ParserIfStatement(@parser)
+    if ParserMatch(@parser, [@TokenType.PRINT]) then return ParserPrintStatement(@parser)
+    if ParserMatch(@parser, [@TokenType.RETURN]) then return ParserReturnStatement(@parser)
+    if ParserMatch(@parser, [@TokenType.WHILE]) then return ParserWhileStatement(@parser)
+    if ParserMatch(@parser, [@TokenType.LEFT_BRACE]) then
+        throw = ParserBlock(@parser)
+        if @throw isa @RuntimeException then return @throw
+        return NewBlockStmt(@throw)
+    end if
+    return ParserExpressionStatement(@parser)
+end function
+// @throwable
+ParserForStatement = function(parser)
+    throw = ParserConsume(@parser, @TokenType.LEFT_PAREN, "Expect '(' after 'for'.")
+    if @throw isa @RuntimeException then return @throw
+
+    initializer = null
+    if ParserMatch(@parser, [@TokenType.SEMICOLON]) then
+        initializer = null
+    else if ParserMatch(@parser, [@TokenType.VAR]) then
+        initializer = ParserVarDeclaration(@parser)
+        if @initializer isa @RuntimeException then return @initializer
+    else
+        initializer = ParserExpressionStatement(@parser)
+        if @initializer isa @RuntimeException then return @initializer
+    end if
+
+    condition = null
+    if not ParserCheck(@parser, @TokenType.SEMICOLON) then
+        condition = ParserExpression(@parser)
+        if @condition isa @RuntimeException then return @condition
+    end if
+    throw = ParserConsume(@parser, @TokenType.SEMICOLON, "Expect ';' after loop condition.")
+    if @throw isa @RuntimeException then return @throw
+
+    increment = null
+    if not ParserCheck(@parser, @TokenType.RIGHT_PAREN) then
+        increment = ParserExpression(@parser)
+        if @increment isa @RuntimeException then return @increment
+    end if
+    throw = ParserConsume(@parser, @TokenType.RIGHT_PAREN, "Expect ')' after for clauses.")
+    if @throw isa @RuntimeException then return @throw
+
+    body = ParserStatement(@parser)
+    if @body isa @RuntimeException then return @body
+
+    if @increment != null then
+        body = NewBlockStmt([@body, NewExpressionStmt(@increment)])
+    end if
+
+    if @condition == null then
+        @condition = NewLiteralExpr(true)
+    end if
+    body = NewWhileStmt(@condition, @body)
+
+    if @initializer != null then
+        body = NewBlockStmt([@initializer, @body])
+    end if
+
+    return @body
+end function
+// @throwable
+ParserIfStatement = function(parser)
+    throw = ParserConsume(@parser, @TokenType.LEFT_PAREN, "Expect '(' after 'if'.")
+    if @throw isa @RuntimeException then return @throw
+
+    condition = ParserExpression(@parser)
+    if @condition isa @RuntimeException then return @condition
+
+    throw = ParserConsume(@parser, @TokenType.RIGHT_PAREN, "Expect ')' after if condition.")
+    if @throw isa @RuntimeException then return @throw
+
+    thenBranch = ParserStatement(@parser)
+    if @thenBranch isa @RuntimeException then return @thenBranch
+
+    elseBranch = null
+    if ParserMatch(@parser, [@TokenType.ELSE]) then
+        elseBranch = ParserStatement(@parser)
+        if @elseBranch isa @RuntimeException then return @elseBranch
+    end if
+
+    return NewIfStmt(@condition, @thenBranch, @elseBranch)
+end function
+// @throwable
+ParserPrintStatement = function(parser)
+    value = ParserExpression(@parser)
+    if @value isa @RuntimeException then return @value
+
+    throw = ParserConsume(@parser, @TokenType.SEMICOLON, "Expect ';' after value.")
+    if @throw isa @RuntimeException then return @throw
+
+    return NewPrintStmt(@value)
+end function
+// @throwable
+ParserReturnStatement = function(parser)
+    keyword = ParserPrevious(@parser)
+    value = null
+    if not ParserCheck(@parser, @TokenType.SEMICOLON) then
+        value = ParserExpression(@parser)
+        if @value isa @RuntimeException then return @value
+    end if
+
+    throw = ParserConsume(@parser, @TokenType.SEMICOLON, "Expect ';' after return value.")
+    if @throw isa @RuntimeException then return @throw
+
+    return NewReturnStmt(@keyword, @value)
+end function
+// @throwable
+ParserVarDeclaration = function(parser)
+    _name = ParserConsume(@parser, @TokenType.IDENTIFIER, "Expect variable name.")
+    if @_name isa @RuntimeException then return @_name
+
+    initializer = null
+    if ParserMatch(@parser, [@TokenType.EQUAL]) then
+        initializer = ParserExpression(@parser)
+        if @initializer isa @RuntimeException then return @initializer
+    end if
+
+    throw = ParserConsume(@parser, @TokenType.SEMICOLON, "Expect ';' after variable declaration.")
+    if @throw isa @RuntimeException then return @throw
+
+    return NewVarStmt(@_name, @initializer)
+end function
+// @throwable
+ParserWhileStatement = function(parser)
+    throw = ParserConsume(@parser, @TokenType.LEFT_PAREN, "Expect '(' after 'while'.")
+    if @throw isa @RuntimeException then return @throw
+
+    condition = ParserExpression(@parser)
+    if @condition isa @RuntimeException then return @condition
+
+    throw = ParserConsume(@parser, @TokenType.RIGHT_PAREN, "Expect ')' after condition.")
+    if @throw isa @RuntimeException then return @throw
+
+    body = ParserStatement(@parser)
+    if @body isa @RuntimeException then return @body
+
+    return NewWhileStmt(@condition, @body)
+end function
+// @throwable
+ParserExpressionStatement = function(parser)
+    expr = ParserExpression(@parser)
+    if @expr isa @RuntimeException then return @expr
+    
+    throw = ParserConsume(@parser, @TokenType.SEMICOLON, "Expect ';' after expression.")
+    if @throw isa @RuntimeException then return @throw
+
+    return NewExpressionStmt(@expr)
+end function
+// @throwable
+ParserFunction = function(parser, kind)
+    _name = ParserConsume(@parser, @TokenType.IDENTIFIER, "Expect " + @kind + " name.")
+    if @_name isa @RuntimeException then return @_name
+
+    throw = ParserConsume(@parser, @TokenType.LEFT_PAREN, "Expect '(' after " + @kind + " name.")
+    if @throw isa @RuntimeException then return @throw
+
+    parameters = []
+    if not ParserCheck(@parser, @TokenType.RIGHT_PAREN) then
+        // do-while
+        if parameters.len >= 255 then
+            ParserError(ParserPeek(@parser), "Cannot have more than 255 parameters.")
+        end if
+        throw = ParserConsume(@parser, @TokenType.IDENTIFIER, "Expect parameter name.")
+        if @throw isa @RuntimeException then return @throw
+        parameters.push(@throw)
+        while ParserMatch(@parser, [@TokenType.COMMA])
+            if parameters.len >= 255 then
+                ParserError(ParserPeek(@parser), "Cannot have more than 255 parameters.")
+            end if
+            throw = ParserConsume(@parser, @TokenType.IDENTIFIER, "Expect parameter name.")
+            if @throw isa @RuntimeException then return @throw
+            parameters.push(@throw)
+        end while
+    end if
+
+    throw = ParserConsume(@parser, @TokenType.RIGHT_PAREN, "Expect ')' after parameters.")
+    if @throw isa @RuntimeException then return @throw
+
+    throw = ParserConsume(@parser, @TokenType.LEFT_BRACE, "Expect '{' before " + @kind + " body.")
+    if @throw isa @RuntimeException then return @throw
+    
+    body = ParserBlock(@parser)
+    if @body isa @RuntimeException then return @body
+
+    return NewFunctionStmt(@_name, @parameters, @body)
+end function
+// @throwable
+ParserBlock = function(parser)
+    statements = []
+    while not ParserCheck(@parser, @TokenType.RIGHT_BRACE) and not ParserIsAtEnd(@parser)
+        statements.push(ParserDeclaration(@parser))
+    end while
+
+    throw = ParserConsume(@parser, @TokenType.RIGHT_BRACE, "Expect '}' after block.")
+    if @throw isa @RuntimeException then return @throw
+    return @statements
+end function
+// @throwable
+ParserAssignment = function(parser)
+    expr = ParserOr(@parser)
+    if @expr isa @RuntimeException then return @expr
+
+    if ParserMatch(@parser, [@TokenType.EQUAL]) then
+        equals = ParserPrevious(@parser)
+        value = ParserAssignment(@parser)
+        if @value isa @RuntimeException then return @value
+
+        if @expr[0] == "Variable" then
+            _name = @expr[1]
+            return NewAssignExpr(@_name, @value)
+        else if @expr[0] == "Get" then
+            get = @expr
+            return NewSetExpr(@get[1], @get[2], @value)
+        end if
+
+        ParserError(@equals, "Invalid assignment target.")
+    end if
+
+    return @expr
+end function
+// @throwable
+ParserOr = function(parser)
+    expr = ParserAnd(@parser)
+    if @expr isa @RuntimeException then return @expr
+
+    while ParserMatch(@parser, [@TokenType.OR])
+        operator = ParserPrevious(@parser)
+        right = ParserAnd(@parser)
+        if @right isa @RuntimeException then return @right
+        expr = NewLogicalExpr(@expr, @operator, @right)
+    end while
+
+    return @expr
+end function
+// @throwable
+ParserAnd = function(parser)
+    expr = ParserEquality(@parser)
+    if @expr isa @RuntimeException then return @expr
+
+    while ParserMatch(@parser, [@TokenType.AND])
+        operator = ParserPrevious(@parser)
+        right = ParserEquality(@parser)
+        if @right isa @RuntimeException then return @right
+        expr = NewLogicalExpr(@expr, @operator, @right)
+    end while
+
+    return @expr
+end function
+// @throwable
+ParserEquality = function(parser)
+    expr = ParserComparison(@parser)
+    if @expr isa @RuntimeException then return @expr
+
+    while ParserMatch(@parser, [@TokenType.BANG_EQUAL, @TokenType.EQUAL_EQUAL])
+        operator = ParserPrevious(@parser)
+        right = ParserComparison(@parser)
+        if @right isa @RuntimeException then return @right
+        expr = NewBinaryExpr(@expr, @operator, @right)
+    end while
+
+    return @expr
+end function
+// @throwable
+ParserComparison = function(parser)
+    expr = ParserTerm(@parser)
+    if @expr isa @RuntimeException then return @expr
+
+    while ParserMatch(@parser, [@TokenType.GREATER, @TokenType.GREATER_EQUAL, @TokenType.LESS, @TokenType.LESS_EQUAL])
+        operator = ParserPrevious(@parser)
+        right = ParserTerm(@parser)
+        if @right isa @RuntimeException then return @right
+        expr = NewBinaryExpr(@expr, @operator, @right)
+    end while
+
+    return @expr
+    
+end function
+// @throwable
+ParserTerm = function(parser)
+    expr = ParserFactor(@parser)
+    if @expr isa @RuntimeException then return @expr
+
+    while ParserMatch(@parser, [@TokenType.MINUS, @TokenType.PLUS])
+        operator = ParserPrevious(@parser)
+        right = ParserFactor(@parser)
+        if @right isa @RuntimeException then return @right
+        expr = NewBinaryExpr(@expr, @operator, @right)
+    end while
+
+    return @expr
+end function
+// @throwable
+ParserFactor = function(parser)
+    expr = ParserUnary(@parser)
+    if @expr isa @RuntimeException then return @expr
+
+    while ParserMatch(@parser, [@TokenType.SLASH, @TokenType.STAR])
+        operator = ParserPrevious(@parser)
+        right = ParserUnary(@parser)
+        if @right isa @RuntimeException then return @right
+        expr = NewBinaryExpr(@expr, @operator, @right)
+    end while
+
+    return @expr
+end function
+// @throwable
+ParserUnary = function(parser)
+    if ParserMatch(@parser, [@TokenType.BANG, @TokenType.MINUS]) then
+        operator = ParserPrevious(@parser)
+        right = ParserUnary(@parser)
+        if @right isa @RuntimeException then return @right
+        return NewUnaryExpr(@operator, @right)
+    end if
+    return ParserCall(@parser)
+end function
+// @throwable
+ParserFinishCall = function(parser, callee)
+    arguments = []
+    if not ParserCheck(@parser, @TokenType.RIGHT_PAREN) then
+        // do-while
+        if arguments.len >= 255 then
+            ParserError(ParserPeek(@parser), "Cannot have more than 255 arguments.")
+        end if
+        expr = ParserExpression(@parser)
+        if @expr isa @RuntimeException then return @expr
+        arguments.push(expr)
+        while ParserMatch(@parser, [@TokenType.COMMA])
+            if arguments.len >= 255 then
+                ParserError(ParserPeek(@parser), "Cannot have more than 255 arguments.")
+            end if
+            expr = ParserExpression(@parser)
+            if @expr isa @RuntimeException then return @expr
+            arguments.push(expr)
+        end while
+    end if
+
+    paren = ParserConsume(@parser, @TokenType.RIGHT_PAREN, "Expect ')' after arguments.")
+    if @paren isa @RuntimeException then return @paren
+
+    return NewCallExpr(@callee, @paren, @arguments)
+end function
+// @throwable
+ParserCall = function(parser)
+    expr = ParserPrimary(@parser)
+    if @expr isa @RuntimeException then return expr
+
+    while true
+        if ParserMatch(@parser, [@TokenType.LEFT_PAREN]) then
+            expr = ParserFinishCall(@parser, @expr)
+            if @expr isa @RuntimeException then return expr
+        else if ParserMatch(@parser, [@TokenType.DOT]) then
+            _name = ParserConsume(@parser, @TokenType.IDENTIFIER, "Expect property name after '.'.")
+            if @_name isa @RuntimeException then return @_name
+            expr = NewGetExpr(@expr, @_name)
+        else
+            break
+        end if
+    end while
+
+    return @expr
+end function
+// @throwable
+ParserPrimary = function(parser)
+    if ParserMatch(@parser, [@TokenType.FALSE]) then return NewLiteralExpr(false)
+    if ParserMatch(@parser, [@TokenType.TRUE]) then return NewLiteralExpr(true)
+    if ParserMatch(@parser, [@TokenType.NIL]) then return NewLiteralExpr(null)
+    
+    if ParserMatch(@parser, [@TokenType.NUMBER, @TokenType.STRING]) then return NewLiteralExpr(ParserPrevious(@parser)[2])
+
+    if ParserMatch(@parser, [@TokenType.SUPER]) then
+        keyword = ParserPrevious(@parser)
+        throw = ParserConsume(@parser, @TokenType.DOT, "Expect '.' after 'super'.")
+        if @throw isa @RuntimeException then return throw
+        method = ParserConsume(@parser, @TokenType.IDENTIFIER, "Expect superclass method name.")
+
+        return NewSuperExpr(@keyword, @method)
+    end if
+
+    if ParserMatch(@parser, [@TokenType.THIS]) then return NewThisExpr(ParserPrevious(@parser))
+
+    if ParserMatch(@parser, [@TokenType.IDENTIFIER]) then return NewVariableExpr(ParserPrevious(@parser))
+
+    if ParserMatch(@parser, [@TokenType.LEFT_PAREN]) then
+        expr = ParserExpression(@parser)
+        if @expr isa @RuntimeException then return expr
+        throw = ParserConsume(@parser, @TokenType.RIGHT_PAREN, "Expect ')' after expression.")
+        if @throw isa @RuntimeException then return throw
+        return NewGroupingExpr(@expr)
+    end if
+
+    return ParserError(ParserPeek(@parser), "Expect expression.")
+end function
+ParserMatch = function(parser, types)
+    for type in @types
+        if ParserCheck(@parser, @type) then
+            ParserAdvance(@parser)
+            return true
+        end if
+    end for
+    return false
+end function
+// @throwable
+ParserConsume = function(parser, type, message)
+    if ParserCheck(@parser, @type) then return ParserAdvance(@parser)
+    return ParserError(ParserPeek(@parser), @message)
+end function
+ParserCheck = function(parser, type)
+    if ParserIsAtEnd(@parser) then return false
+    return ParserPeek(@parser)[0] == @type
+end function
+ParserAdvance = function(parser)
+    if not ParserIsAtEnd(@parser) then @parser[1] = @parser[1] + 1
+    return ParserPrevious(@parser)
+end function
+ParserIsAtEnd = function(parser)
+    return ParserPeek(@parser)[0] == @TokenType.EOF
+end function
+ParserPeek = function(parser)
+    return @parser[0][@parser[1]]
+end function
+ParserPrevious = function(parser)
+    return @parser[0][@parser[1] - 1]
+end function
+ParserError = function(token, message)
+    LoxErrorTM(@token, @message)
+    return NewParseError()
+end function
+ParserSynchronize = function(parser)
+    ParserAdvance(@parser)
+    while not ParserIsAtEnd(@parser)
+        if ParserPrevious(@parser)[0] == @TokenType.SEMICOLON then return
+        peekType = ParserPeek(@parser)[0]
+        if peekType == @TokenType.CLASS or peekType == @TokenType.FUN or peekType == @TokenType.VAR or
+        peekType == @TokenType.FOR or peekType == @TokenType.IF or peekType == @TokenType.WHILE or
+        peekType == @TokenType.PRINT or peekType == @TokenType.RETURN then return
+        ParserAdvance(@parser)
+    end while
+end function
+// stmt
+// @throwable
+StmtAccept = function(stmt, visitor)
+    if @stmt[0] == "Block" then return VisitorVisitBlockStmt(@visitor, @stmt)
+    if @stmt[0] == "Class" then return VisitorVisitClassStmt(@visitor, @stmt)
+    if @stmt[0] == "Expression" then return VisitorVisitExpressionStmt(@visitor, @stmt)
+    if @stmt[0] == "Function" then return VisitorVisitFunctionStmt(@visitor, @stmt)
+    if @stmt[0] == "If" then return VisitorVisitIfStmt(@visitor, @stmt)
+    if @stmt[0] == "Print" then return VisitorVisitPrintStmt(@visitor, @stmt)
+    if @stmt[0] == "Return" then return VisitorVisitReturnStmt(@visitor, @stmt)
+    if @stmt[0] == "Var" then return VisitorVisitVarStmt(@visitor, @stmt)
+    if @stmt[0] == "While" then return VisitorVisitWhileStmt(@visitor, @stmt)
+end function
+// block
+// @statements  stmt[1] Stmt[]
+NewBlockStmt = function(statements)
+    return ["Block", @statements, rnd]
+end function
+// class
+// @name        stmt[1] Token
+// @superclass  stmt[2] Expr
+// @methods     stmt[3] Stmt[]
+NewClassStmt = function(_name, superclass, methods)
+    return ["Class", @_name, @superclass, @methods, rnd]
+end function
+// expression
+// @expression  stmt[1] Expr
+NewExpressionStmt = function(expression)
+    return ["Expression", @expression, rnd]
+end function
+// function
+// @name        stmt[1] Token
+// @params  stmt[2] Token[]
+// @body        stmt[3] Stmt[]
+NewFunctionStmt = function(_name, _params, body)
+    return ["Function", @_name, @_params, @body, rnd]
+end function
+// if
+// @condition   stmt[1] Expr
+// @thenBranch  stmt[2] Stmt
+// @elseBranch  stmt[3] Stmt
+NewIfStmt = function(condition, thenBranch, elseBranch)
+    return ["If", @condition, @thenBranch, @elseBranch, rnd]
+end function
+// print
+// @expression  stmt[1] Expr
+NewPrintStmt = function(expression)
+    return ["Print", @expression, rnd]
+end function
+// return
+// @keyword     stmt[1] Token
+// @value       stmt[2] Expr
+NewReturnStmt = function(keyword, value)
+    return ["Return", @keyword, @value, rnd]
+end function
+// var
+// @name        stmt[1] Token
+// @initializer stmt[2] Expr
+NewVarStmt = function(_name, initializer)
+    return ["Var", @_name, @initializer, rnd]
+end function
+// while
+// @condition   stmt[1] Expr
+// @body        stmt[2] Stmt
+NewWhileStmt = function(condition, body)
+    return ["While", @condition, @body, rnd]
+end function
+// visitor
+// @throwable
+VisitorVisitBlockStmt = function(visitor, stmt)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitBlockStmt(@visitor, @stmt)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitBlockStmt(@visitor, @stmt)
+    end if
+end function
+// @throwable
+VisitorVisitClassStmt = function(visitor, stmt)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitClassStmt(@visitor, @stmt)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitClassStmt(@visitor, @stmt)
+    end if
+end function
+// @throwable
+VisitorVisitExpressionStmt = function(visitor, stmt)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitExpressionStmt(@visitor, @stmt)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitExpressionStmt(@visitor, @stmt)
+    end if
+end function
+// @throwable
+VisitorVisitFunctionStmt = function(visitor, stmt)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitFunctionStmt(@visitor, @stmt)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitFunctionStmt(@visitor, @stmt)
+    end if
+end function
+// @throwable
+VisitorVisitIfStmt = function(visitor, stmt)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitIfStmt(@visitor, @stmt)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitIfStmt(@visitor, @stmt)
+    end if
+end function
+// @throwable
+VisitorVisitPrintStmt = function(visitor, stmt)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitPrintStmt(@visitor, @stmt)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitPrintStmt(@visitor, @stmt)
+    end if
+end function
+// @throwable
+VisitorVisitReturnStmt = function(visitor, stmt)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitReturnStmt(@visitor, @stmt)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitReturnStmt(@visitor, @stmt)
+    end if
+end function
+// @throwable
+VisitorVisitVarStmt = function(visitor, stmt)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitVarStmt(@visitor, @stmt)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitVarStmt(@visitor, @stmt)
+    end if
+end function
+// @throwable
+VisitorVisitWhileStmt = function(visitor, stmt)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitWhileStmt(@visitor, @stmt)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitWhileStmt(@visitor, @stmt)
+    end if
+end function
+// @throwable
+VisitorVisitAssignExpr = function(visitor, expr)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitAssignExpr(@visitor, @expr)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitAssignExpr(@visitor, @expr)
+    end if
+end function
+// @throwable
+VisitorVisitBinaryExpr = function(visitor, expr)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitBinaryExpr(@visitor, @expr)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitBinaryExpr(@visitor, @expr)
+    end if
+end function
+// @throwable
+VisitorVisitCallExpr = function(visitor, expr)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitCallExpr(@visitor, @expr)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitCallExpr(@visitor, @expr)
+    end if
+end function
+// @throwable
+VisitorVisitGetExpr = function(visitor, expr)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitGetExpr(@visitor, @expr)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitGetExpr(@visitor, @expr)
+    end if
+end function
+// @throwable
+VisitorVisitGroupingExpr = function(visitor, expr)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitGroupingExpr(@visitor, @expr)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitGroupingExpr(@visitor, @expr)
+    end if
+end function
+// @throwable
+VisitorVisitLiteralExpr = function(visitor, expr)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitLiteralExpr(@visitor, @expr)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitLiteralExpr(@visitor, @expr)
+    end if
+end function
+// @throwable
+VisitorVisitLogicalExpr = function(visitor, expr)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitLogicalExpr(@visitor, @expr)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitLogicalExpr(@visitor, @expr)
+    end if
+end function
+// @throwable
+VisitorVisitSetExpr = function(visitor, expr)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitSetExpr(@visitor, @expr)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitSetExpr(@visitor, @expr)
+    end if
+end function
+// @throwable
+VisitorVisitSuperExpr = function(visitor, expr)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitSuperExpr(@visitor, @expr)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitSuperExpr(@visitor, @expr)
+    end if
+end function
+// @throwable
+VisitorVisitThisExpr = function(visitor, expr)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitThisExpr(@visitor, @expr)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitThisExpr(@visitor, @expr)
+    end if
+end function
+// @throwable
+VisitorVisitUnaryExpr = function(visitor, expr)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitUnaryExpr(@visitor, @expr)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitUnaryExpr(@visitor, @expr)
+    end if
+end function
+// @throwable
+VisitorVisitVariableExpr = function(visitor, expr)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitVariableExpr(@visitor, @expr)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitVariableExpr(@visitor, @expr)
+    end if
+end function
+// resolver
+FunctionType = {
+    "NONE": "NONE",
+    "FUNCTION": "FUNCTION",
+    "INITIALIZER": "INITIALIZER",
+    "METHOD": "METHOD",
+}
+ClassType = {
+    "NONE": "NONE",
+    "CLASS": "CLASS",
+    "SUBCLASS": "SUBCLASS",
+}
+// @interpreter     resolver[0]
+// @scopes          resolver[1]     string[]
+// @currentFunction resolver[2]     FunctionType
+// @currentClass    resolver[3]     ClassType
+NewResolver = function(interpreter)
+    return [interpreter, [], @FunctionType.NONE, @ClassType.NONE, "Resolver"]
+end function
+// @throwable
+ResolverResolve = function(resolver, statements)
+    for statement in @statements
+        throw = ResolverResolveStmt(@resolver, @statement)
+        if @throw isa @RuntimeException then return @throw
+    end for
+end function
+// @throwable
+ResolverVisitBlockStmt = function(resolver, stmt)
+    ResolverBeginScope(@resolver)
+    throw = ResolverResolve(@resolver, @stmt[1])
+    if @throw isa @RuntimeException then return @throw
+    ResolverEndScope(@resolver)
+end function
+// @throwable
+ResolverVisitClassStmt = function(resolver, stmt)
+    enclosingClass = @resolver[3]
+    resolver[3] = @ClassType.CLASS
+
+    ResolverDeclare(@resolver, @stmt[1])
+    ResolverDefine(@resolver, @stmt[1])
+
+    if @stmt[2] != null and @stmt[1][1] == @stmt[2][1] then
+        LoxErrorTM(@stmt[2][1], "A class cannot inherit from itself.")
+    end if
+
+    if @stmt[2] != null then
+        @resolver[3] = @ClassType.SUBCLASS
+        throw = ResolverResolve(@resolver, @stmt[2])
+        if @throw isa @RuntimeException then return @throw
+    end if
+
+    if @stmt[2] != null then
+        ResolverBeginScope(@resolver)
+        @resolver[1][resolver[1].len - 1]["super"] = true
+    end if
+
+    ResolverBeginScope(@resolver)
+    @resolver[1][resolver[1].len - 1]["this"] = true
+
+    for method in @stmt[3]
+        declaration = @FunctionType.METHOD
+        if @method[1][1] == "init" then
+            declaration = @FunctionType.INITIALIZER
+        end if
+        throw = ResolverResolveFunction(@resolver, @method, @declaration)
+        if @throw isa @RuntimeException then return @throw
+    end for
+
+    ResolverEndScope(@resolver)
+
+    if @stmt[2] != null then ResolverEndScope(@resolver)
+
+    resolver[3] = @enclosingClass
+end function
+// @throwable
+ResolverVisitExpressionStmt = function(resolver, stmt)
+    throw = ResolverResolveExpr(@resolver, @stmt[1])
+    if @throw isa @RuntimeException then return @throw
+end function
+// @throwable
+ResolverVisitFunctionStmt = function(resolver, stmt)
+    ResolverDeclare(@resolver, @stmt[1])
+    ResolverDefine(@resolver, @stmt[1])
+    throw = ResolverResolveFunction(@resolver, @stmt, @FunctionType.FUNCTION)
+    if @throw isa @RuntimeException then return @throw
+end function
+// @throwable
+ResolverVisitIfStmt = function(resolver, stmt)
+    throw = ResolverResolveExpr(@resolver, @stmt[1])
+    if @throw isa @RuntimeException then return @throw
+    throw = ResolverResolveStmt(@resolver, @stmt[2])
+    if @throw isa @RuntimeException then return @throw
+    if @stmt[3] != null then
+        throw = ResolverResolveStmt(@resolver, @stmt[3])
+        if @throw isa @RuntimeException then return @throw
+    end if
+end function
+// @throwable
+ResolverVisitPrintStmt = function(resolver, stmt)
+    throw = ResolverResolveExpr(@resolver, @stmt[1])
+    if @throw isa @RuntimeException then return @throw
+end function
+// @throwable
+ResolverVisitReturnStmt = function(resolver, stmt)
+    if @resolver[2] == @FunctionType.NONE then
+        LoxErrorTM(@stmt[1], "Cannot return from top-level code.")
+    end if
+
+    if @stmt[2] != null then
+        if @resolver[2] == @FunctionType.INITIALIZER then
+            LoxErrorTM(@stmt[1], "Cannot return a value from an initializer.")
+        end if
+        throw = ResolverResolveExpr(@resolver, @stmt[2])
+        if @throw isa @RuntimeException then return @throw
+    end if
+end function
+// @throwable
+ResolverVisitVarStmt = function(resolver, stmt)
+    ResolverDeclare(@resolver, @stmt[1])
+    if @stmt[2] != null then
+        throw = ResolverResolveExpr(@resolver, @stmt[2])
+        if @throw isa @RuntimeException then return @throw
+    end if
+    ResolverDefine(@resolver, @stmt[1])
+end function
+// @throwable
+ResolverVisitWhileStmt = function(resolver, stmt)
+    throw = ResolverResolveExpr(@resolver, @stmt[1])
+    if @throw isa @RuntimeException then return @throw
+    throw = ResolverResolveStmt(@resolver, @stmt[2])
+    if @throw isa @RuntimeException then return @throw
+end function
+// expr
+// @throwable
+ResolverVisitAssignExpr = function(resolver, expr)
+    throw = ResolverResolveExpr(@resolver, @expr[2])
+    if @throw isa @RuntimeException then return @throw
+    ResolverResolveLocal(@resolver, @expr, @expr[1])
+end function
+// @throwable
+ResolverVisitBinaryExpr = function(resolver, expr)
+    throw = ResolverResolveExpr(@resolver, @expr[1])
+    if @throw isa @RuntimeException then return @throw
+    ResolverResolveExpr(@resolver, @expr[3])
+end function
+// @throwable
+ResolverVisitCallExpr = function(resolver, expr)
+    throw = ResolverResolveExpr(@resolver, @expr[1])
+    if @throw isa @RuntimeException then return @throw
+    for argument in @expr[3]
+        throw = ResolverResolveExpr(@resolver, @argument)
+        if @throw isa @RuntimeException then return @throw
+    end for
+end function
+// @throwable
+ResolverVisitGetExpr = function(resolver, expr)
+    throw = ResolverResolveExpr(@resolver, @expr[1])
+    if @throw isa @RuntimeException then return @throw
+end function
+// @throwable
+ResolverVisitGroupingExpr = function(resolver, expr)
+    throw = ResolverResolveExpr(@resolver, @expr[1])
+    if @throw isa @RuntimeException then return @throw
+end function
+ResolverVisitLiteralExpr = function(resolver, expr)
+    // do nothing
+end function
+// @throwable
+ResolverVisitLogicalExpr = function(resolver, expr)
+    throw = ResolverResolveExpr(@resolver, @expr[1])
+    if @throw isa @RuntimeException then return @throw
+    throw = ResolverResolveExpr(@resolver, @expr[3])
+    if @throw isa @RuntimeException then return @throw
+end function
+// @throwable
+ResolverVisitSetExpr = function(resolver, expr)
+    throw = ResolverResolveExpr(@resolver, @expr[3])
+    if @throw isa @RuntimeException then return @throw
+    throw = ResolverResolveExpr(@resolver, @expr[1])
+    if @throw isa @RuntimeException then return @throw
+end function
+ResolverVisitSuperExpr = function(resolver, expr)
+    if @resolver[3] == @ClassType.NONE then
+        LoxErrorTM(@expr[1], "Cannot use 'super' outside of a class.")
+    else if @resolver[3] != @ClassType.SUBCLASS then
+        LoxErrorTM(@expr[1], "Cannot use 'super' in a class with no superclass.")
+    end if
+
+    ResolverResolveLocal(@resolver, @expr, @expr[1])
+end function
+ResolverVisitThisExpr = function(resolver, expr)
+    if @resolver[3] == @ClassType.NONE then
+        LoxErrorTM(@expr[1], "Cannot use 'this' outside of a class.")
+        return
+    end if
+    ResolverResolveLocal(@resolver, @expr, @expr[1])
+end function
+// @throwable
+ResolverVisitUnaryExpr = function(resolver, expr)
+    throw = ResolverResolveExpr(@resolver, @expr[2])
+    if @throw isa @RuntimeException then return @throw
+end function
+ResolverVisitVariableExpr = function(resolver, expr)
+    if resolver[1].len != 0 and (resolver[1][resolver[1].len - 1].hasIndex(@expr[1][1]) and resolver[1][resolver[1].len - 1][@expr[1][1]] == false) then
+        LoxErrorTM(@expr[1], "Cannot read local variable in its own initializer.")
+    end if
+
+    ResolverResolveLocal(@resolver, @expr, @expr[1])
+end function
+// @throwable
+ResolverResolveStmt = function(resolver, stmt)
+    throw = StmtAccept(@stmt, @resolver)
+    if @throw isa @RuntimeException then return @throw
+end function
+// @throwable
+ResolverResolveExpr = function(resolver, expr)
+    throw = ExprAccept(@expr, @resolver)
+    if @throw isa @RuntimeException then return @throw
+end function
+// @throwable
+ResolverResolveFunction = function(resolver, _function, type)
+    enclosingFunction = @resolver[2]
+    @resolver[2] = @type
+    ResolverBeginScope(@resolver)
+    for param in @_function[2]
+        ResolverDeclare(@resolver, @param)
+        ResolverDefine(@resolver, @param)
+    end for
+    throw = ResolverResolve(@resolver, @_function[3])
+    if @throw isa @RuntimeException then return @throw
+    ResolverEndScope(@resolver)
+    @resolver[2] = @enclosingFunction
+end function
+ResolverBeginScope = function(resolver)
+    @resolver[1].push({})
+end function
+ResolverEndScope = function(resolver)
+    @resolver[1].pop()
+end function
+ResolverDeclare = function(resolver, _name)
+    if resolver[1].len == 0 then return
+    scope = @resolver[1][resolver[1].len - 1]
+    if scope.hasIndex(@_name[1]) then
+        LoxErrorTM(@_name, "Already a variable with this name in this scope.")
+    end if
+
+    scope[@_name[1]] = false
+end function
+ResolverDefine = function(resolver, _name)
+    if resolver[1].len == 0 then return
+    @resolver[1][resolver[1].len - 1][@_name[1]] = true
+end function
+ResolverResolveLocal = function(resolver, expr, _name)
+    for i in range(resolver[1].len - 1, 0, -1)
+        if resolver[1][@i].hasIndex(@_name[1]) then
+            IntrpResolve(@resolver[0], @expr, resolver[1].len - 1 - @i)
+            return
+        end if
+    end for
+end function
+// environment
+// @enclosing  env[0] Environment
+// @values     env[1] string: Object
+NewEnvironment = function(enclosing=null)
+    return [enclosing, {}]
+end function
+// @throwable
+EnvironmentGet = function(env, _name)
+    if env[1].hasIndex(@_name[1]) then
+        return @env[1][@_name[1]]
+    end if
+
+    if @env[0] != null then
+        return EnvironmentGet(@env[0], @_name)
+    end if
+
+    return NewRuntimeError(@_name, "Undefined variable '" + @_name[1] + "'.")
+end function
+// @throwable
+EnvironmentAssign = function(env, _name, value)
+    if env[1].hasIndex(@_name[1]) then
+        @env[1][@_name[1]] = @value
+        return
+    end if
+
+    if @env[0] != null then
+        throw = EnvironmentAssign(@env[0], @_name, @value)
+        if @throw isa @RuntimeException then return @throw
+        return
+    end if
+
+    return NewRuntimeError(@_name, "Undefined variable '" + @_name[1] + "'.")
+end function
+EnvironmentDefine = function(env, _name, value)
+    @env[1][@_name] = @value
+end function
+EnvironmentAncestor = function(env, distance)
+    ancestor = @env
+    for i in range(0, @distance - 1, 1)
+        ancestor = @ancestor[0]
+    end for
+    return @ancestor
+end function
+EnvironmentGetAt = function(env, distance, _name)
+    ancestor = EnvironmentAncestor(@env, @distance)[1]
+    if ancestor.hasIndex(@_name) then
+        return @ancestor[@_name]
+    end if
+    return null
+end function
+EnvironmentAssignAt = function(env, distance, _name, value)
+    EnvironmentAncestor(@env, @distance)[1][@_name[1]] = @value
+end function
+EnvironmentTostring = function(env)
+    result = str(@env[1])
+    if @env[0] != null then
+        result = @result + " -> " + EnvironmentTostring(@env[0])
+    end if
+
+    return @result
+end function
+// lox callable
+IsLoxCallable = function(callable)
+    return @callable[0] == "LoxFunction" or @callable[0] == "LoxClass" or @callable[0] == "ClockFn"
+end function
+LoxCallableToString = function(callable)
+    if @callable[0] == "LoxFunction" then
+        return "<fn " + @callable[1][1] + ">"
+    end if
+    if @callable[0] == "LoxClass" then
+        return @callable[1]
+    end if
+    if @callable[0] == "ClockFn" then
+        return "<native fn>"
+    end if
+end function
+LoxCallableArity = function(callable)
+    if @callable[0] == "LoxFunction" then
+        return callable[1][2].len
+    end if
+    if @callable[0] == "LoxClass" then
+        initializer = LoxClassFindMethod(@callable, "init")
+        if @initializer == null then return 0
+        return LoxCallableArity(@initializer)
+    end if
+    if @callable[0] == "ClockFn" then
+        return 0
+    end if
+end function
+// @catchable
+// @throwable
+LoxCallableCall = function(callable, intrp, arguments)
+    if @callable[0] == "LoxFunction" then
+        environment = NewEnvironment(@callable[2])
+        for i in range(0, callable[1][2].len - 1, 1)
+            EnvironmentDefine(@environment, @callable[1][2][@i][1], @arguments[@i])
+        end for
+        
+        throw = IntrpExecuteBlock(@intrp, @callable[1][3], @environment)
+        if @throw isa @Return then
+            if @callable[3] then return EnvironmentGetAt(@callable[2], 0, "this")
+            return @throw.value
+        end if
+        if @throw isa @RuntimeException then return @throw
+
+        if @callable[3] then return EnvironmentGetAt(@callable[2], 0, "this")
+        return null
+    end if
+    if @callable[0] == "LoxClass" then
+        instance = NewLoxInstance(@callable)
+        initializer = LoxClassFindMethod(@callable, "init")
+        if @initializer != null then
+            bind = LoxFunctionBind(@initializer, @instance)
+            throw = LoxCallableCall(@bind, @intrp, @arguments)
+            if @throw isa @RuntimeException then return @throw
+        end if
+        return @instance
+    end if
+    if @callable[0] == "ClockFn" then
+        return time
+    end if
+end function
+// lox function
+// @declaration     function[1] FunctionStmt
+// @closure         function[2] Environment
+// @isInitializer   function[3] boolean
+NewLoxFunction = function(declaration, closure, isInitializer)
+    return ["LoxFunction", @declaration, @closure, @isInitializer]
+end function
+LoxFunctionBind = function(fn, instance)
+    environment = NewEnvironment(@fn[2])
+    EnvironmentDefine(@environment, "this", @instance)
+    return NewLoxFunction(@fn[1], @environment, @fn[3])
+end function
+// lox class
+// @name        class[1] string
+// @superclass  class[2] LoxClass
+// @methods     class[3] string: LoxFunction
+NewLoxClass = function(_name, superclass, methods)
+    return ["LoxClass", @_name, @superclass, @methods]
+end function
+LoxClassFindMethod = function(loxClass, _name)
+    if @loxClass[3].hasIndex(@_name) then
+        return @loxClass[3][@_name]
+    end if
+
+    if @loxClass[2] != null then
+        return LoxClassFindMethod(@loxClass[2], @_name)
+    end if
+end function
+// lox instance
+// @klass  instance[1] LoxClass
+// @fields instance[2] string: Object
+NewLoxInstance = function(klass)
+    return ["LoxInstance", @klass, {}]
+end function
+// @throwable
+LoxInstanceGet = function(instance, _name)
+    if @instance[2].hasIndex(@_name[1]) then
+        return @instance[2][@_name[1]]
+    end if
+    method = LoxClassFindMethod(@instance[1], @_name[1])
+    if @method != null then return LoxFunctionBind(@method, @instance)
+
+    return @NewRuntimeError(@_name, "Undefined property '" + @_name[1] + "'.")
+end function
+LoxInstanceSet = function(instance, _name, value)
+    @instance[2][@_name[1]] = @value
+end function
+LoxInstanceToString = function(instance)
+    return @instance[1][1] + " instance"
+end function
+// interpreter
+ClockFn = ["ClockFn"]
+// @globals     intrp[0] Environment
+// @environment intrp[1] Environment
+// @locals      intrp[2] string: {}
+NewInterpreter = function
+    _globals = NewEnvironment()
+    environment =  @_globals
+    _locals = {}
+    EnvironmentDefine(@_globals, "clock", @ClockFn)
+    return [_globals, @environment, @_locals, "Interpreter"]
+end function
+// @catchable
+Interpret = function(intrp, statements)
+    for statement in @statements
+        throw = IntrpExecute(@intrp, @statement)
+        if @throw isa @RuntimeError then
+            LoxRuntimeError(@throw)
+            return
+        end if
+    end for
+end function
+// @throwable
+IntrpEvaluate = function(intrp, expr)
+    return ExprAccept(@expr, @intrp)
+end function
+// @throwable
+IntrpExecute = function(intrp, stmt)
+    throw = StmtAccept(@stmt, @intrp)
+    if @throw isa @RuntimeException then return @throw
+end function
+IntrpResolve = function(intrp, expr, depth)
+    intrp[2][@expr] = @depth
+end function
+// @throwable
+IntrpExecuteBlock = function(intrp, statements, environment)
+    previous = @intrp[1]
+    intrp[1] = @environment
+    for statement in @statements
+        throw = IntrpExecute(@intrp, @statement)
+        if @throw isa @RuntimeException then
+            intrp[1] = @previous
+            return @throw
+        end if
+    end for
+    intrp[1] = @previous
+end function
+// @throwable
+IntrpVisitBlockStmt = function(intrp, stmt)
+    throw = IntrpExecuteBlock(@intrp, @stmt[1], NewEnvironment(@intrp[1]))
+    if @throw isa @RuntimeException then return @throw
+end function
+// @throwable
+IntrpVisitClassStmt = function(intrp, stmt)
+    superclass = null
+    if @stmt[2] != null then
+        superclass = IntrpEvaluate(@intrp, @stmt[2])
+        if @superclass isa @RuntimeException then return @superclass
+        if not (@superclass[0] == "LoxClass") then
+            return NewRuntimeError(@stmt[2][1], "Superclass must be a class.")
+        end if
+    end if
+
+    EnvironmentDefine(@intrp[1], @stmt[1][1], null)
+
+    if stmt[2] != null then
+        intrp[1] = NewEnvironment(@intrp[1])
+        EnvironmentDefine(@intrp[1], "super", @superclass)
+    end if
+
+    methods = {}
+    for method in @stmt[3]
+        _function = NewLoxFunction(@method, @intrp[1], @method[1][1] == "init")
+        methods[@method[1][1]] = @_function
+    end for
+
+    klass = NewLoxClass(@stmt[1][1], @superclass, @methods)
+    if @superclass != null then
+        intrp[1] = @intrp[1][0]
+    end if
+
+    throw = EnvironmentAssign(@intrp[1], @stmt[1], @klass)
+    if @throw isa @RuntimeException then return @throw
+end function
+// @throwable
+IntrpVisitExpressionStmt = function(intrp, stmt)
+    throw = IntrpEvaluate(@intrp, @stmt[1])
+    if @throw isa @RuntimeException then return @throw
+end function
+// @throwable
+IntrpVisitFunctionStmt = function(intrp, stmt)
+    _function = NewLoxFunction(@stmt, @intrp[1], false)
+    throw = EnvironmentDefine(@intrp[1], @stmt[1][1], @_function)
+    if @throw isa @RuntimeException then return @throw
+end function
+// @throwable
+IntrpVisitIfStmt = function(intrp, stmt)
+    value = IntrpEvaluate(@intrp, @stmt[1])
+    if @value isa @RuntimeException then return @value
+    if IntrpIsTruthy(@value) then
+        throw = IntrpExecute(@intrp, @stmt[2])
+        if @throw isa @RuntimeException then return @throw
+    else if @stmt[3] != null then
+        throw = IntrpExecute(@intrp, @stmt[3])
+        if @throw isa @RuntimeException then return @throw
+    end if
+end function
+// @throwable
+IntrpVisitPrintStmt = function(intrp, stmt)
+    value = IntrpEvaluate(@intrp, @stmt[1])
+    if @value isa @RuntimeException then return @value
+    print(IntrpStringify(@value))
+end function
+// @throwable
+IntrpVisitReturnStmt = function(intrp, stmt)
+    value = null
+    if @stmt[2] != null then
+        value = IntrpEvaluate(@intrp, @stmt[2])
+        if @value isa @RuntimeException then return @value
+    end if
+    return NewReturn(@value)
+end function
+IntrpVisitVarStmt = function(intrp, stmt)
+    value = null
+    if @stmt[2] != null then
+        value = IntrpEvaluate(@intrp, @stmt[2])
+        if @value isa @RuntimeException then return @value
+    end if
+
+    EnvironmentDefine(@intrp[1], @stmt[1][1], @value)
+end function
+IntrpVisitWhileStmt = function(intrp, stmt)
+    while IntrpIsTruthy(IntrpEvaluate(@intrp, @stmt[1]))
+        throw = IntrpExecute(@intrp, @stmt[2])
+        if @throw isa @RuntimeException then return @throw
+    end while
+end function
+IntrpVisitAssignExpr = function(intrp, expr)
+    value = IntrpEvaluate(@intrp, @expr[2])
+    if @value isa @RuntimeException then return @value
+
+    if @intrp[2].hasIndex(@expr) then
+        distance = @intrp[2][@expr]
+    else
+        distance = null
+    end if
+    if @distance != null then
+        EnvironmentAssignAt(@intrp[1], @distance, @expr[1], @value)
+    else
+        throw = EnvironmentAssign(@intrp[0], @expr[1], @value)
+        if @throw isa @RuntimeException then return @throw
+    end if
+
+    return @value
+end function
+// @throwable
+IntrpVisitBinaryExpr = function(intrp, expr)
+    left = IntrpEvaluate(@intrp, @expr[1])
+    if @left isa @RuntimeException then return @left
+    right = IntrpEvaluate(@intrp, @expr[3])
+    if @right isa @RuntimeException then return @right
+    case = @expr[2][0]
+    if case == @TokenType.BANG_EQUAL then return not IntrpIsEqual(@left, @right)
+    if case == @TokenType.EQUAL_EQUAL then return IntrpIsEqual(@left, @right)
+    if case == @TokenType.GREATER then
+        throw = IntrpCheckNumberOperands(@expr[2], @left, @right)
+        if @throw isa @RuntimeException then return @throw
+        return @left > @right
+    end if
+    if case == @TokenType.GREATER_EQUAL then
+        throw = IntrpCheckNumberOperands(@expr[2], @left, @right)
+        if @throw isa @RuntimeException then return @throw
+        return @left >= @right
+    end if
+    if case == @TokenType.LESS then
+        throw = IntrpCheckNumberOperands(@expr[2], @left, @right)
+        if @throw isa @RuntimeException then return @throw
+        return @left < @right
+    end if
+    if case == @TokenType.LESS_EQUAL then
+        throw = IntrpCheckNumberOperands(@expr[2], @left, @right)
+        if @throw isa @RuntimeException then return @throw
+        return @left <= @right
+    end if
+    if case == @TokenType.MINUS then
+        throw = IntrpCheckNumberOperands(@expr[2], @left, @right)
+        if @throw isa @RuntimeException then return @throw
+        return @left - @right
+    end if
+    if case == @TokenType.PLUS then
+        if @left isa number and @right isa number then return @left + @right
+        if @left isa string and @right isa string then return @left + @right
+        return NewRuntimeError(@expr[2], "Operands must be two numbers or two strings.")
+    end if
+    if case == @TokenType.SLASH then
+        throw = IntrpCheckNumberOperands(@expr[2], @left, @right)
+        if @throw isa @RuntimeException then return @throw
+        if @right == 0 then return NewRuntimeError(@expr[2], "Division by zero.")
+        return @left / @right
+    end if
+    if case == @TokenType.STAR then
+        throw = IntrpCheckNumberOperands(@expr[2], @left, @right)
+        if @throw isa @RuntimeException then return @throw
+        return @left * @right
+    end if
+
+    return null
+end function
+// @throwable
+IntrpVisitCallExpr = function(intrp, expr)
+    callee = IntrpEvaluate(@intrp, @expr[1])
+    if @callee isa @RuntimeException then return @callee
+
+    arguments = []
+    for argument in @expr[3]
+        value = IntrpEvaluate(@intrp, @argument)
+        if @value isa @RuntimeException then return @value
+        arguments.push(@value)
+    end for
+
+    if not IsLoxCallable(@callee) then
+        return NewRuntimeError(@expr[2], "Can only call functions and classes.")
+    end if
+
+    if arguments.len != LoxCallableArity(@callee) then
+        return NewRuntimeError(@expr[2], "Expected " + LoxCallableArity(@callee) + " arguments but got " + arguments.len + ".")
+    end if
+
+    return LoxCallableCall(@callee, @intrp, @arguments)
+end function
+// @throwable
+IntrpVisitGetExpr = function(intrp, expr)
+    object = IntrpEvaluate(@intrp, @expr[1])
+    if @object isa @RuntimeException then return @object
+
+    if @object[0] == "LoxInstance" then
+        return LoxInstanceGet(@object, @expr[2])
+        // return @object[1][@expr[3][1]]
+    end if
+
+    return NewRuntimeError(@expr[3], "Only instances have properties.")
+end function
+// @throwable
+IntrpVisitGroupingExpr = function(intrp, expr)
+    return IntrpEvaluate(@intrp, @expr[1])
+end function
+IntrpVisitLiteralExpr = function(intrp, expr)
+    return @expr[1]
+end function
+// @throwable
+IntrpVisitLogicalExpr = function(intrp, expr)
+    left = IntrpEvaluate(@intrp, @expr[1])
+    if @left isa @RuntimeException then return @left
+
+    if @expr[2][0] == @TokenType.OR then
+        if IntrpIsTruthy(@left) then return @left
+    else if not IntrpIsTruthy(@left) then 
+        return @left
+    end if
+    return IntrpEvaluate(@intrp, @expr[3])
+end function
+IntrpVisitSetExpr = function(intrp, expr)
+    object = IntrpEvaluate(@intrp, @expr[1])
+    if @object isa @RuntimeException then return @object
+
+    if @object[0] != "LoxInstance" then
+        return NewRuntimeError(@expr[3], "Only instances have fields.")
+    end if
+
+    value = IntrpEvaluate(@intrp, @expr[3])
+    if @value isa @RuntimeException then return @value
+    LoxInstanceSet(@object, @expr[2], @value)
+    return @value
+end function
+// @throwable
+IntrpVisitSuperExpr = function(intrp, expr)
+    if @intrp[2].hasIndex(@expr) then
+        distance = @intrp[2][@expr]
+    else
+        distance = null
+    end if
+    superClass = EnvironmentGetAt(@intrp[1], @distance, "super")
+
+    object = EnvironmentGetAt(@intrp[1], @distance - 1, "this")
+
+    method = LoxClassFindMethod(@superClass, @expr[2][1])
+
+    if @method == null then
+        return NewRuntimeError(@expr[2], "Undefined property '" + @expr[2][1] + "'.")
+    end if
+
+    return LoxFunctionBind(@method, @object)
+end function
+IntrpVisitThisExpr = function(intrp, expr)
+    return IntrpLookupVariable(@intrp, @expr[1], @expr)
+end function
+// @throwable
+IntrpVisitUnaryExpr = function(intrp, expr)
+    right = IntrpEvaluate(@intrp, @expr[2])
+    case = @expr[1][0]
+    if @case == "BANG" then 
+        return not IntrpIsTruthy(@right)
+    else if @case == "MINUS" then
+        throw = IntrpCheckNumberOperand(@expr[1], @right)
+        if @throw isa @RuntimeException then return @throw
+        return -@right
+    end if
+end function
+IntrpVisitVariableExpr = function(intrp, expr)
+    return IntrpLookupVariable(@intrp, @expr[1], @expr)
+end function
+IntrpLookupVariable = function(intrp, _name, expr)
+    if @intrp[2].hasIndex(@expr) then
+        distance = @intrp[2][@expr]
+    else
+        distance = null
+    end if
+    if @distance != null then
+        return EnvironmentGetAt(@intrp[1], @distance, @_name[1])
+    end if
+    return EnvironmentGet(@intrp[0], @_name)
+end function
+// @throwable
+IntrpCheckNumberOperand = function(operator, operand)
+    if @operand isa number then return
+    return NewRuntimeError(@operator, "Operand must be a number.")
+end function
+// @throwable
+IntrpCheckNumberOperands = function(operator, left, right)
+    if @left isa number and @right isa number then return
+    return NewRuntimeError(@operator, "Operands must be numbers.")
+end function
+IntrpIsTruthy = function(object)
+    if @object == null then return false
+    if @object isa number then return @object != 0
+    return true
+end function
+IntrpIsEqual = function(a, b)
+    if @a == null and @b == null then return true
+    if @a == null then return false
+    return @a == @b
+end function
+IntrpStringify = function(object)
+    if @object == null then return "nil"
+    
+    // if @object isa number then
+    //     return str(@object)
+    // end if
+    return str(@object)
+end function
+interpreter = NewInterpreter()
+// lox
+hadError = false
+hadRuntimeError = false
+LoxErrorLM = function(line, message)
+    print(@line + " " + @message)
+end function
+LoxErrorTM = function(token, message)
+    if @token[0] == @TokenType.EOF then
+        LoxReport(@token[3], " at end", @message)
+    else
+        LoxReport(@token[3], " at '" + @token[1] + "'", @message)
+    end if
+end function
+LoxReport = function(line, where, message)
+    print("[line " + @line + "] Error" + @where + ": " + @message)
+    globals.hadError = true
+end function
+// exception
+RuntimeException = {}
+RuntimeError = new @RuntimeException
+NewRuntimeError = function(token, message)
+    ret = new @RuntimeError
+    ret.token = @token
+    ret.message = @message
+    return @ret
+end function
+ParseError = new RuntimeException
+NewParseError = function
+    ret = new @ParseError
+    return @ret
+end function
+Return = new RuntimeException
+NewReturn = function(value)
+    ret = new @Return
+    ret.value = @value
+    return @ret
+end function
+LoxRuntimeError = function(error)
+    print(@error.message + "\n[line " + @error.token[3] + "]")
+    globals.hadRuntimeError = true
+end function
+// run
+run = function(source)
+    scanner = NewScanner(@source)
+    tokens = ScanTokens(@scanner)
+    
+    // for token in @tokens
+    //     print(TokenToString(@token))
+    // end for
+    // return
+
+    parser = NewParser(@tokens)
+    statements = Parse(@parser)
+    if @hadError then return
+    
+    resolver = NewResolver(@interpreter)
+    throw = ResolverResolve(@resolver, @statements)
+    if @throw isa @RuntimeException then return @throw
+    if @hadError then return
+
+    Interpret(@interpreter, @statements)
+end function
+runPrompt = function
+    while true
+        line = user_input("> ")
+        if line.len == 0 then break
+        run(@line)
+        globals.hadError = false
+    end while
+end function
+runSource = function(source)
+    run(@source)
+    if @hadError then return 65
+    if @hadRuntimeError then return 70
+    return 0
+end function
+IntrpUnitTests = function
+    forloop = [
+        "var s = clock();",
+        "for (var i = 1; i <= 1000; i = i + 1) {",
+            "print i;",
+        "}",
+        "print clock() - s;",
+    ]
+    whileloop = [
+        "var s = clock();",
+        "var i = 1;",
+        "while (i <= 1000) {",
+            "print i;",
+            "i = i + 1;",
+        "}",
+        "print clock() - s;",
+    ]
+    classInheritance = [
+        "class Animal {",
+        "  init(name) {",
+        "    this.name = name;",
+        "  }",
+        "  speak() {",
+        "    print this.name + "" makes a noise."";",
+        "  }",
+        "}",
+        "class Dog < Animal {",
+        "  init(name, breed) {",
+        "    super.init(name);",
+        "    this.breed = breed;",
+        "  }",
+        "  speak() {",
+        "    print this.name + "" barks. It is a "" + this.breed + ""."";",
+        "  }",
+        "}",
+        "var myDog = Dog(""Buddy"", ""Golden Retriever"");",
+        "myDog.speak(); // Buddy barks. It is a Golden Retriever.",
+        "var myAnimal = Animal(""Generic Animal"");",
+        "myAnimal.speak();",
+    ]
+    fibonacci = [
+        "fun fib(n) {",
+        "  if (n <= 1) return n;",
+        "  return fib(n - 1) + fib(n - 2);",
+        "}",
+        "var s = clock();",
+        "print fib(1);",
+        "print clock() - s;",
+    ]
+    runSource(whileloop.join(char(10)))
+end function
+IntrpBenchmark = function
+    // code from https://github.com/munificent/craftinginterpreters/blob/master/test/benchmark/
+    // minDepth = 2
+    // maxDepth = 4
+    binary_trees = [
+        "class Tree {",
+        "  init(item, depth) {",
+        "    this.item = item;",
+        "    this.depth = depth;",
+        "    if (depth > 0) {",
+        "      var item2 = item + item;",
+        "      depth = depth - 1;",
+        "      this.left = Tree(item2 - 1, depth);",
+        "      this.right = Tree(item2, depth);",
+        "    } else {",
+        "      this.left = nil;",
+        "      this.right = nil;",
+        "    }",
+        "  }",
+        "",
+        "  check() {",
+        "    if (this.left == nil) {",
+        "      return this.item;",
+        "    }",
+        "",
+        "    return this.item + this.left.check() - this.right.check();",
+        "  }",
+        "}",
+        "",
+        "var minDepth = 2;",
+        "var maxDepth = 7;",
+        "var stretchDepth = maxDepth + 1;",
+        "",
+        "var start = clock();",
+        "",
+        "print ""stretch tree of depth:"";",
+        "print stretchDepth;",
+        "print ""check:"";",
+        "print Tree(0, stretchDepth).check();",
+        "",
+        "var longLivedTree = Tree(0, maxDepth);",
+        "",
+        "// iterations = 2 ** maxDepth",
+        "var iterations = 1;",
+        "var d = 0;",
+        "while (d < maxDepth) {",
+        "  iterations = iterations * 2;",
+        "  d = d + 1;",
+        "}",
+        "",
+        "var depth = minDepth;",
+        "while (depth < stretchDepth) {",
+        "  var check = 0;",
+        "  var i = 1;",
+        "  while (i <= iterations) {",
+        "    check = check + Tree(i, depth).check() + Tree(-i, depth).check();",
+        "    i = i + 1;",
+        "  }",
+        "",
+        "  print ""num trees:"";",
+        "  print iterations * 2;",
+        "  print ""depth:"";",
+        "  print depth;",
+        "  print ""check:"";",
+        "  print check;",
+        "",
+        "  iterations = iterations / 4;",
+        "  depth = depth + 2;",
+        "}",
+        "",
+        "print ""long lived tree of depth:"";",
+        "print maxDepth;",
+        "print ""check:"";",
+        "print longLivedTree.check();",
+        "print ""elapsed:"";",
+        "print clock() - start;",
+    ]
+    // whileTimes = 100
+    equality = [
+        "var i = 0;",
+        "",
+        "var loopStart = clock();",
+        "",
+        "while (i < 100) {",
+        "  i = i + 1;",
+        "",
+        "  1; 1; 1; 2; 1; nil; 1; ""str""; 1; true;",
+        "  nil; nil; nil; 1; nil; ""str""; nil; true;",
+        "  true; true; true; 1; true; false; true; ""str""; true; nil;",
+        "  ""str""; ""str""; ""str""; ""stru""; ""str""; 1; ""str""; nil; ""str""; true;",
+        "}",
+        "",
+        "var loopTime = clock() - loopStart;",
+        "",
+        "var start = clock();",
+        "",
+        "i = 0;",
+        "while (i < 1000) {",
+        "  i = i + 1;",
+        "",
+        "  1 == 1; 1 == 2; 1 == nil; 1 == ""str""; 1 == true;",
+        "  nil == nil; nil == 1; nil == ""str""; nil == true;",
+        "  true == true; true == 1; true == false; true == ""str""; true == nil;",
+        "  ""str"" == ""str""; ""str"" == ""stru""; ""str"" == 1; ""str"" == nil; ""str"" == true;",
+        "}",
+        "",
+        "var elapsed = clock() - start;",
+        "print ""loop"";",
+        "print loopTime;",
+        "print ""elapsed"";",
+        "print elapsed;",
+        "print ""equals"";",
+        "print elapsed - loopTime;",
+    ]
+    // fibNum = 15
+    fib = [
+        "fun fib(n) {",
+        "  if (n <= 1) return n;",
+        "  return fib(n - 2) + fib(n - 1);",
+        "}",
+        " ",
+        "var start = clock();",
+        "print fib(15) == 610;",
+        "print clock() - start;",
+    ]
+    // whileTimes = 100
+    instantiation = [
+        "// This benchmark stresses instance creation and initializer calling.",
+        "",
+        "class Foo {",
+        "  init() {}",
+        "}",
+        "",
+        "var start = clock();",
+        "var i = 0;",
+        "while (i < 100) {",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  Foo();",
+        "  i = i + 1;",
+        "}",
+        "",
+        "print clock() - start;",
+    ];
+    // whileTimes = 100
+    benchmarkCode = [
+        "// This benchmark stresses just method invocation.",
+        "",
+        "class Foo {",
+        "  method0() {}",
+        "  method1() {}",
+        "  method2() {}",
+        "  method3() {}",
+        "  method4() {}",
+        "  method5() {}",
+        "  method6() {}",
+        "  method7() {}",
+        "  method8() {}",
+        "  method9() {}",
+        "  method10() {}",
+        "  method11() {}",
+        "  method12() {}",
+        "  method13() {}",
+        "  method14() {}",
+        "  method15() {}",
+        "  method16() {}",
+        "  method17() {}",
+        "  method18() {}",
+        "  method19() {}",
+        "  method20() {}",
+        "  method21() {}",
+        "  method22() {}",
+        "  method23() {}",
+        "  method24() {}",
+        "  method25() {}",
+        "  method26() {}",
+        "  method27() {}",
+        "  method28() {}",
+        "  method29() {}",
+        "}",
+        "",
+        "var foo = Foo();",
+        "var start = clock();",
+        "var i = 0;",
+        "while (i < 100) {",
+        "  foo.method0();",
+        "  foo.method1();",
+        "  foo.method2();",
+        "  foo.method3();",
+        "  foo.method4();",
+        "  foo.method5();",
+        "  foo.method6();",
+        "  foo.method7();",
+        "  foo.method8();",
+        "  foo.method9();",
+        "  foo.method10();",
+        "  foo.method11();",
+        "  foo.method12();",
+        "  foo.method13();",
+        "  foo.method14();",
+        "  foo.method15();",
+        "  foo.method16();",
+        "  foo.method17();",
+        "  foo.method18();",
+        "  foo.method19();",
+        "  foo.method20();",
+        "  foo.method21();",
+        "  foo.method22();",
+        "  foo.method23();",
+        "  foo.method24();",
+        "  foo.method25();",
+        "  foo.method26();",
+        "  foo.method27();",
+        "  foo.method28();",
+        "  foo.method29();",
+        "  i = i + 1;",
+        "}",
+        "",
+        "print clock() - start;",
+    ];
+    // n = 100
+    method_call = [
+        "class Toggle {",
+        "  init(startState) {",
+        "    this.state = startState;",
+        "  }",
+        "",
+        "  value() { return this.state; }",
+        "",
+        "  activate() {",
+        "    this.state = !this.state;",
+        "    return this;",
+        "  }",
+        "}",
+        "",
+        "class NthToggle < Toggle {",
+        "  init(startState, maxCounter) {",
+        "    super.init(startState);",
+        "    this.countMax = maxCounter;",
+        "    this.count = 0;",
+        "  }",
+        "",
+        "  activate() {",
+        "    this.count = this.count + 1;",
+        "    if (this.count >= this.countMax) {",
+        "      super.activate();",
+        "      this.count = 0;",
+        "    }",
+        "",
+        "    return this;",
+        "  }",
+        "}",
+        "",
+        "var start = clock();",
+        "var n = 100;",
+        "var val = true;",
+        "var toggle = Toggle(val);",
+        "",
+        "for (var i = 0; i < n; i = i + 1) {",
+        "  val = toggle.activate().value();",
+        "  val = toggle.activate().value();",
+        "  val = toggle.activate().value();",
+        "  val = toggle.activate().value();",
+        "  val = toggle.activate().value();",
+        "  val = toggle.activate().value();",
+        "  val = toggle.activate().value();",
+        "  val = toggle.activate().value();",
+        "  val = toggle.activate().value();",
+        "  val = toggle.activate().value();",
+        "}",
+        "",
+        "print toggle.value();",
+        "",
+        "val = true;",
+        "var ntoggle = NthToggle(val, 3);",
+        "",
+        "for (var i = 0; i < n; i = i + 1) {",
+        "  val = ntoggle.activate().value();",
+        "  val = ntoggle.activate().value();",
+        "  val = ntoggle.activate().value();",
+        "  val = ntoggle.activate().value();",
+        "  val = ntoggle.activate().value();",
+        "  val = ntoggle.activate().value();",
+        "  val = ntoggle.activate().value();",
+        "  val = ntoggle.activate().value();",
+        "  val = ntoggle.activate().value();",
+        "  val = ntoggle.activate().value();",
+        "}",
+        "",
+        "print ntoggle.value();",
+        "print clock() - start;",
+    ];
+    // whileTimes = 100
+    string_equality = [
+        "// This benchmark stresses both field and method lookup.",
+        "",
+        "class Foo {",
+        "  init() {",
+        "    this.field0 = 1;",
+        "    this.field1 = 1;",
+        "    this.field2 = 1;",
+        "    this.field3 = 1;",
+        "    this.field4 = 1;",
+        "    this.field5 = 1;",
+        "    this.field6 = 1;",
+        "    this.field7 = 1;",
+        "    this.field8 = 1;",
+        "    this.field9 = 1;",
+        "    this.field10 = 1;",
+        "    this.field11 = 1;",
+        "    this.field12 = 1;",
+        "    this.field13 = 1;",
+        "    this.field14 = 1;",
+        "    this.field15 = 1;",
+        "    this.field16 = 1;",
+        "    this.field17 = 1;",
+        "    this.field18 = 1;",
+        "    this.field19 = 1;",
+        "    this.field20 = 1;",
+        "    this.field21 = 1;",
+        "    this.field22 = 1;",
+        "    this.field23 = 1;",
+        "    this.field24 = 1;",
+        "    this.field25 = 1;",
+        "    this.field26 = 1;",
+        "    this.field27 = 1;",
+        "    this.field28 = 1;",
+        "    this.field29 = 1;",
+        "  }",
+        "",
+        "  method0() { return this.field0; }",
+        "  method1() { return this.field1; }",
+        "  method2() { return this.field2; }",
+        "  method3() { return this.field3; }",
+        "  method4() { return this.field4; }",
+        "  method5() { return this.field5; }",
+        "  method6() { return this.field6; }",
+        "  method7() { return this.field7; }",
+        "  method8() { return this.field8; }",
+        "  method9() { return this.field9; }",
+        "  method10() { return this.field10; }",
+        "  method11() { return this.field11; }",
+        "  method12() { return this.field12; }",
+        "  method13() { return this.field13; }",
+        "  method14() { return this.field14; }",
+        "  method15() { return this.field15; }",
+        "  method16() { return this.field16; }",
+        "  method17() { return this.field17; }",
+        "  method18() { return this.field18; }",
+        "  method19() { return this.field19; }",
+        "  method20() { return this.field20; }",
+        "  method21() { return this.field21; }",
+        "  method22() { return this.field22; }",
+        "  method23() { return this.field23; }",
+        "  method24() { return this.field24; }",
+        "  method25() { return this.field25; }",
+        "  method26() { return this.field26; }",
+        "  method27() { return this.field27; }",
+        "  method28() { return this.field28; }",
+        "  method29() { return this.field29; }",
+        "}",
+        "",
+        "var foo = Foo();",
+        "var start = clock();",
+        "var i = 0;",
+        "while (i < 100) {",
+        "  foo.method0();",
+        "  foo.method1();",
+        "  foo.method2();",
+        "  foo.method3();",
+        "  foo.method4();",
+        "  foo.method5();",
+        "  foo.method6();",
+        "  foo.method7();",
+        "  foo.method8();",
+        "  foo.method9();",
+        "  foo.method10();",
+        "  foo.method11();",
+        "  foo.method12();",
+        "  foo.method13();",
+        "  foo.method14();",
+        "  foo.method15();",
+        "  foo.method16();",
+        "  foo.method17();",
+        "  foo.method18();",
+        "  foo.method19();",
+        "  foo.method20();",
+        "  foo.method21();",
+        "  foo.method22();",
+        "  foo.method23();",
+        "  foo.method24();",
+        "  foo.method25();",
+        "  foo.method26();",
+        "  foo.method27();",
+        "  foo.method28();",
+        "  foo.method29();",
+        "  i = i + 1;",
+        "}",
+        "",
+        "print clock() - start;",
+    ];
+    // treeDepth = 4
+    // no for loop
+    trees = [
+        "class Tree {",
+        "  init(depth) {",
+        "    this.depth = depth;",
+        "    if (depth > 0) {",
+        "      this.a = Tree(depth - 1);",
+        "      this.b = Tree(depth - 1);",
+        "      this.c = Tree(depth - 1);",
+        "      this.d = Tree(depth - 1);",
+        "      this.e = Tree(depth - 1);",
+        "    }",
+        "  }",
+        "",
+        "  walk() {",
+        "    if (this.depth == 0) return 0;",
+        "    return this.depth ",
+        "        + this.a.walk()",
+        "        + this.b.walk()",
+        "        + this.c.walk()",
+        "        + this.d.walk()",
+        "        + this.e.walk();",
+        "  }",
+        "}",
+        "",
+        "var tree = Tree(4);",
+        "var start = clock();",
+        "if (tree.walk() != 194) print ""Error"";",
+        "print clock() - start;",
+    ];
+    // whileTimes = 100
+    zoo = [
+        "class Zoo {",
+        "  init() {",
+        "    this.aarvark  = 1;",
+        "    this.baboon   = 1;",
+        "    this.cat      = 1;",
+        "    this.donkey   = 1;",
+        "    this.elephant = 1;",
+        "    this.fox      = 1;",
+        "  }",
+        "  ant()    { return this.aarvark; }",
+        "  banana() { return this.baboon; }",
+        "  tuna()   { return this.cat; }",
+        "  hay()    { return this.donkey; }",
+        "  grass()  { return this.elephant; }",
+        "  mouse()  { return this.fox; }",
+        "}",
+        "",
+        "var zoo = Zoo();",
+        "var sum = 0;",
+        "var start = clock();",
+        "while (sum < 100) {",
+        "  sum = sum + zoo.ant()",
+        "            + zoo.banana()",
+        "            + zoo.tuna()",
+        "            + zoo.hay()",
+        "            + zoo.grass()",
+        "            + zoo.mouse();",
+        "}",
+        "",
+        "print sum;",
+        "print clock() - start;",
+    ];
+    // whileLimit = 1
+    // forTimes = 100
+    zoo_batch = [
+        "class Zoo {",
+        "  init() {",
+        "    this.aarvark  = 1;",
+        "    this.baboon   = 1;",
+        "    this.cat      = 1;",
+        "    this.donkey   = 1;",
+        "    this.elephant = 1;",
+        "    this.fox      = 1;",
+        "  }",
+        "  ant()    { return this.aarvark; }",
+        "  banana() { return this.baboon; }",
+        "  tuna()   { return this.cat; }",
+        "  hay()    { return this.donkey; }",
+        "  grass()  { return this.elephant; }",
+        "  mouse()  { return this.fox; }",
+        "}",
+        "",
+        "var zoo = Zoo();",
+        "var sum = 0;",
+        "var start = clock();",
+        "var batch = 0;",
+        "while (clock() - start < 1) {",
+        "  for (var i = 0; i < 100; i = i + 1) {",
+        "    sum = sum + zoo.ant()",
+        "              + zoo.banana()",
+        "              + zoo.tuna()",
+        "              + zoo.hay()",
+        "              + zoo.grass()",
+        "              + zoo.mouse();",
+        "  }",
+        "  batch = batch + 1;",
+        "}",
+        "",
+        "print sum;",
+        "print batch;",
+        "print clock() - start;",
+    ];
+    benchmarks = {
+        "binary_trees": @binary_trees,
+        "equality": @equality,
+        "fib": @fib,
+        "instantiation": @instantiation,
+        "method_call": @method_call,
+        "string_equality": @string_equality,
+        "trees": @trees,
+        "zoo": @zoo,
+        "zoo_batch": @zoo_batch,
+    }
+    for benchmarkName in benchmarks.indexes
+        print "Benchmark: " + @benchmarkName
+        runSource(benchmarks[benchmarkName].join(char(10)))
+    end for
+end function
+IntrpBenchmark()
