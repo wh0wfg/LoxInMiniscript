@@ -1,5 +1,25 @@
 # Mlox Extended
 
+## Extended Grammar
+### list expression
+```js
+var l = [1,2,3,4];
+```
+### map expression
+```js
+var m = {1:1, "key":"value", l:"object"};
+```
+### subscript
+```js
+l = l[1];
+```
+### slice
+
+```js
+l = l[1:2];
+```
+
+## Tips
 If the function name is XXXDoSomething, you will most likely need to pass in an instance of XXX.
 
 eg: 

@@ -286,6 +286,19 @@ end function
 NewGetExpr = function(object, _name)
     return ["Get", @object, @_name, rnd]
 end function
+// subscript
+// @object      expr[1] Expr
+// @index       expr[2] Expr
+NewSubscriptExpr = function(object, index)
+    return ["Subscript", @object, @index, rnd]
+end function
+// slice
+// @object      expr[1] Expr
+// @start       expr[2] Expr
+// @end         expr[3] Expr
+NewSliceExpr = function(object, start, _end)
+    return ["Slice", @object, @start, @_end, rnd]
+end function
 // group
 // @expression  expr[1] Expr
 NewGroupingExpr = function(expression)
@@ -781,6 +794,40 @@ ParserCall = function(parser)
             _name = ParserConsume(@parser, @TokenType.IDENTIFIER, "Expect property name after '.'.")
             if @_name isa @RuntimeException then return @_name
             expr = NewGetExpr(@expr, @_name)
+        else if ParserMatch(@parser, [@TokenType.LEFT_SQUARE]) then
+            // slice without start
+            if ParserMatch(@parser, [@TokenType.COLON]) then
+                // slice without end
+                if ParserMatch(@parser, [@TokenType.RIGHT_SQUARE]) then
+                    expr = NewSliceExpr(@expr, null, null)
+                else
+                    _end = ParserExpression(@parser)
+                    if @_end isa @RuntimeException then return @_end
+                    throw = ParserConsume(@parser, @TokenType.RIGHT_SQUARE, "Expect ']' after slice.")
+                    if @throw isa @RuntimeException then return @throw
+                    expr = NewSliceExpr(@expr, null, @_end)
+                end if
+            else
+                index = ParserExpression(@parser)
+                if @index isa @RuntimeException then return @index
+                // slice
+                if ParserMatch(@parser, [@TokenType.COLON]) then
+                    // slice without end
+                    if ParserMatch(@parser, [@TokenType.RIGHT_SQUARE]) then
+                        expr = NewSliceExpr(@expr, @index, null)
+                    else
+                        _end = ParserExpression(@parser)
+                        if @_end isa @RuntimeException then return @_end
+                        throw = ParserConsume(@parser, @TokenType.RIGHT_SQUARE, "Expect ']' after slice.")
+                        if @throw isa @RuntimeException then return @throw
+                        expr = NewSliceExpr(@expr, @index, @_end)
+                    end if
+                else 
+                    throw = ParserConsume(@parser, @TokenType.RIGHT_SQUARE, "Expect ']' after index.")
+                    if @throw isa @RuntimeException then return @throw
+                    expr = NewSubscriptExpr(@expr, @index)
+                end if
+            end if
         else
             break
         end if
@@ -1088,6 +1135,22 @@ VisitorVisitGetExpr = function(visitor, expr)
         return IntrpVisitGetExpr(@visitor, @expr)
     else if @visitor[-1] == "Resolver" then
         return ResolverVisitGetExpr(@visitor, @expr)
+    end if
+end function
+// @throwable
+VisitorVisitSubscriptExpr = function(visitor, expr)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitSubscriptExpr(@visitor, @expr)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitSubscriptExpr(@visitor, @expr)
+    end if
+end function
+// @throwable
+VisitorVisitSliceExpr = function(visitor, expr)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitSliceExpr(@visitor, @expr)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitSliceExpr(@visitor, @expr)
     end if
 end function
 // @throwable
