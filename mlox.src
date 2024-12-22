@@ -257,6 +257,7 @@ ExprAccept = function(expr, visitor)
     if case == "Map" then return VisitorVisitMapExpr(@visitor, @expr)
     if case == "Logical" then return VisitorVisitLogicalExpr(@visitor, @expr)
     if case == "Set" then return VisitorVisitSetExpr(@visitor, @expr)
+    if case == "SubscriptSet" then return VisitorVisitSubscriptSetExpr(@visitor, @expr)
     if case == "Super" then return VisitorVisitSuperExpr(@visitor, @expr)
     if case == "This" then return VisitorVisitThisExpr(@visitor, @expr)
     if case == "Unary" then return VisitorVisitUnaryExpr(@visitor, @expr)
@@ -326,6 +327,14 @@ end function
 // @value       expr[3] Expr
 NewSetExpr = function(object, _name, value)
     return ["Set", @object, @_name, @value, rnd]
+end function
+// subscriptSet
+// @object      expr[1] Expr
+// @index       expr[2] Expr
+// @value       expr[3] Expr
+// @name        expr[4] Token
+NewSubscriptSetExpr = function(object, index, value, _name)
+    return ["SubscriptSet", @object, @index, @value, @_name, rnd]
 end function
 // super
 // @keyword    expr[1] Token
@@ -657,6 +666,9 @@ ParserAssignment = function(parser)
         else if @expr[0] == "Get" then
             get = @expr
             return NewSetExpr(@get[1], @get[2], @value)
+        else if @expr[0] == "Subscript" then
+            subscript = @expr
+            return NewSubscriptSetExpr(@subscript[1], @subscript[2], @value, @subscript[3])
         end if
 
         ParserError(@equals, "Invalid assignment target.")
@@ -1206,6 +1218,14 @@ VisitorVisitSetExpr = function(visitor, expr)
     end if
 end function
 // @throwable
+VisitorVisitSubscriptSetExpr = function(visitor, expr)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitSubscriptSetExpr(@visitor, @expr)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitSubscriptSetExpr(@visitor, @expr)
+    end if
+end function
+// @throwable
 VisitorVisitSuperExpr = function(visitor, expr)
     if @visitor[-1] == "Interpreter" then
         return IntrpVisitSuperExpr(@visitor, @expr)
@@ -1452,6 +1472,15 @@ ResolverVisitSetExpr = function(resolver, expr)
     throw = ResolverResolveExpr(@resolver, @expr[3])
     if @throw isa @RuntimeException then return @throw
     throw = ResolverResolveExpr(@resolver, @expr[1])
+    if @throw isa @RuntimeException then return @throw
+end function
+// @throwable
+ResolverVisitSubscriptSetExpr = function(resolver, expr)
+    throw = ResolverResolveExpr(@resolver, @expr[3])
+    if @throw isa @RuntimeException then return @throw
+    throw = ResolverResolveExpr(@resolver, @expr[1])
+    if @throw isa @RuntimeException then return @throw
+    throw = ResolverResolveExpr(@resolver, @expr[2])
     if @throw isa @RuntimeException then return @throw
 end function
 ResolverVisitSuperExpr = function(resolver, expr)
@@ -1727,7 +1756,7 @@ LoxListSet = function(_list, index, value, _name)
     throw = LoxListInbounds(@_list, @index, @_name)
     if @throw isa @RuntimeException then return @throw
 
-    list[1][@index] = @value  
+    _list[1][@index] = @value  
 end function
 // @throwable
 LoxListGet = function(_list, index, _name)
@@ -2029,7 +2058,7 @@ IntrpVisitSubscriptExpr = function(intrp, expr)
     if @object[0] == "LoxMap" then
         return LoxMapGet(@object, @index, @expr[3])
     end if
-    if @object isa string then
+    if @object isa @string then
         if @index < 0 then index = object.len + @index
         if @index < 0 or @index >= object.len then
             return NewRuntimeError(@expr[3], "Index " + @index + " out of bounds.")
@@ -2042,9 +2071,7 @@ end function
 IntrpVisitSliceExpr = function(intrp, expr)
     object = IntrpEvaluate(@intrp, @expr[1])
     if @object isa @RuntimeException then return @object
-    if not (@object[0] == "LoxList" or @object isa string) then
-        
-    end if
+
     start = 0
     if @expr[2] != null then
         start = IntrpEvaluate(@intrp, @expr[2])
@@ -2065,7 +2092,7 @@ IntrpVisitSliceExpr = function(intrp, expr)
         return NewLoxList(@object[1][@start:@_end], @object[2])
     end if
 
-    if @object isa string then
+    if @object isa @string then
         _end = object.len
         if @expr[3] != null then
             _end = IntrpEvaluate(@intrp, @expr[3])
@@ -2128,6 +2155,7 @@ IntrpVisitLogicalExpr = function(intrp, expr)
     end if
     return IntrpEvaluate(@intrp, @expr[3])
 end function
+// @throwable
 IntrpVisitSetExpr = function(intrp, expr)
     object = IntrpEvaluate(@intrp, @expr[1])
     if @object isa @RuntimeException then return @object
@@ -2140,6 +2168,37 @@ IntrpVisitSetExpr = function(intrp, expr)
     if @value isa @RuntimeException then return @value
     LoxInstanceSet(@object, @expr[2], @value)
     return @value
+end function
+// @throwable
+IntrpVisitSubscriptSetExpr = function(intrp, expr)
+    object = IntrpEvaluate(@intrp, @expr[1])
+    if @object isa @RuntimeException then return @object
+    index = IntrpEvaluate(@intrp, @expr[2])
+    if @index isa @RuntimeException then return @index
+
+    value = IntrpEvaluate(@intrp, @expr[3])
+    if @value isa @RuntimeException then return @value
+
+    if @object[0] == "LoxList" then
+        throw = LoxListSet(@object, @index, @value, @expr[4])
+        if @throw isa @RuntimeException then return @throw
+        return @object
+    end if
+    if @object[0] == "LoxMap" then
+        LoxMapSet(@object, @index, @value)
+        return @object
+    end if
+    if @object isa @string then
+        if @index < 0 then index = object.len + @index
+        if @index < 0 or @index >= object.len then
+            return NewRuntimeError(@expr[4], "Index " + @index + " out of bounds.")
+        end if
+        throw = IntrpCheckNumberOperand(@expr[4], @value)
+        if @throw isa @RuntimeException then return @throw
+        object[@index] = @value
+        return @object
+    end if
+    return NewRuntimeError(@expr[4], "Subscript not supported on " + @object[0] + ".")
 end function
 // @throwable
 IntrpVisitSuperExpr = function(intrp, expr)
