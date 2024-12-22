@@ -42,6 +42,7 @@ TokenType = {
 "THIS": "THIS",
 "TRUE": "TRUE",
 "VAR": "VAR",
+"DO": "DO",
 "WHILE": "WHILE",
 "EOF": "EOF",
 }
@@ -63,6 +64,7 @@ keywords = {
     "this": TokenType.THIS,
     "true": TokenType.TRUE,
     "var": TokenType.VAR,
+    "do": TokenType.DO,
     "while": TokenType.WHILE,
 }
 // @type        token[0]
@@ -460,6 +462,7 @@ ParserStatement = function(parser)
     if ParserMatch(@parser, [@TokenType.IF]) then return ParserIfStatement(@parser)
     if ParserMatch(@parser, [@TokenType.PRINT]) then return ParserPrintStatement(@parser)
     if ParserMatch(@parser, [@TokenType.RETURN]) then return ParserReturnStatement(@parser)
+    if ParserMatch(@parser, [@TokenType.DO]) then return ParserDoWhileStatement(@parser)
     if ParserMatch(@parser, [@TokenType.WHILE]) then return ParserWhileStatement(@parser)
     if ParserMatch(@parser, [@TokenType.LEFT_BRACE]) then
         throw = ParserBlock(@parser)
@@ -606,6 +609,28 @@ ParserVarDeclaration = function(parser)
     if @throw isa @RuntimeException then return @throw
 
     return NewVarStmt(@_name, @initializer)
+end function
+// @throwable
+ParserDoWhileStatement = function(parser)
+    body = ParserStatement(@parser)
+    if @body isa @RuntimeException then return @body
+
+    throw = ParserConsume(@parser, @TokenType.WHILE, "Expect 'while' after 'do' body.")
+    if @throw isa @RuntimeException then return @throw
+
+    throw = ParserConsume(@parser, @TokenType.LEFT_PAREN, "Expect '(' after 'while'.")
+    if @throw isa @RuntimeException then return @throw
+    
+    condition = ParserExpression(@parser)
+    if @condition isa @RuntimeException then return @condition
+
+    throw = ParserConsume(@parser, @TokenType.RIGHT_PAREN, "Expect ')' after condition.")
+    if @throw isa @RuntimeException then return @throw
+
+    throw = ParserConsume(@parser, @TokenType.SEMICOLON, "Expect ';' after do-while statement.")
+    if @throw isa @RuntimeException then return @throw
+
+    return NewDoWhileStmt(@condition, @body)
 end function
 // @throwable
 ParserWhileStatement = function(parser)
@@ -1025,6 +1050,7 @@ StmtAccept = function(stmt, visitor)
     if @stmt[0] == "Return" then return VisitorVisitReturnStmt(@visitor, @stmt)
     if @stmt[0] == "Var" then return VisitorVisitVarStmt(@visitor, @stmt)
     if @stmt[0] == "Foreach" then return VisitorVisitForeachStmt(@visitor, @stmt)
+    if @stmt[0] == "DoWhile" then return VisitorVisitDoWhileStmt(@visitor, @stmt)
     if @stmt[0] == "While" then return VisitorVisitWhileStmt(@visitor, @stmt)
 end function
 // block
@@ -1082,6 +1108,12 @@ end function
 // @body        stmt[3] Stmt
 NewForeachStmt = function(_name, iterable, body)
     return ["Foreach", @_name, @iterable, @body, rnd]
+end function
+// do-while
+// @condition   stmt[1] Expr
+// @body        stmt[2] Stmt
+NewDoWhileStmt = function(condition, body)
+    return ["DoWhile", @condition, @body, rnd]
 end function
 // while
 // @condition   stmt[1] Expr
@@ -1160,6 +1192,14 @@ VisitorVisitForeachStmt = function(visitor, stmt)
         return IntrpVisitForeachStmt(@visitor, @stmt)
     else if @visitor[-1] == "Resolver" then
         return ResolverVisitForeachStmt(@visitor, @stmt)
+    end if
+end function
+// @throwable
+VisitorVisitDoWhileStmt = function(visitor, stmt)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitDoWhileStmt(@visitor, @stmt)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitDoWhileStmt(@visitor, @stmt)
     end if
 end function
 // @throwable
@@ -1441,6 +1481,13 @@ ResolverVisitForeachStmt = function(resolver, stmt)
     throw = ResolverResolveStmt(@resolver, @stmt[3])
     if @throw isa @RuntimeException then return @throw
     ResolverEndScope(@resolver)
+end function
+// @throwable
+ResolverVisitDoWhileStmt = function(resolver, stmt)
+    throw = ResolverResolveStmt(@resolver, @stmt[2])
+    if @throw isa @RuntimeException then return @throw
+    throw = ResolverResolveExpr(@resolver, @stmt[1])
+    if @throw isa @RuntimeException then return @throw
 end function
 // @throwable
 ResolverVisitWhileStmt = function(resolver, stmt)
@@ -2074,6 +2121,14 @@ IntrpVisitForeachStmt = function(intrp, stmt)
     end if
 end function
 // @throwable
+IntrpVisitDoWhileStmt = function(intrp, stmt)
+    throw = IntrpExecute(@intrp, @stmt[2])
+    while IntrpIsTruthy(IntrpEvaluate(@intrp, @stmt[1]))
+        throw = IntrpExecute(@intrp, @stmt[2])
+        if @throw isa @RuntimeException then return @throw
+    end while
+end function
+// @throwable
 IntrpVisitWhileStmt = function(intrp, stmt)
     while IntrpIsTruthy(IntrpEvaluate(@intrp, @stmt[1]))
         throw = IntrpExecute(@intrp, @stmt[2])
@@ -2559,6 +2614,13 @@ IntrpUnitTests = function
         "  print i;",
         "}",
     ]
-    runSource(foreach.join(char(10)))
+    dowhile = [
+        "var i = 0;",
+        "do {",
+        "  print i;",
+        "  i = i + 1;",
+        "} while (i < 5);",
+    ]
+    runSource(dowhile.join(char(10)))
 end function
 IntrpUnitTests
