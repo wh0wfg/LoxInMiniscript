@@ -1403,7 +1403,7 @@ EnvironmentTostring = function(env)
 end function
 // lox callable
 IsLoxCallable = function(callable)
-    return @callable[0] == "LoxFunction" or @callable[0] == "LoxClass" or @callable[0] == "ClockFn"
+    return @callable[0] == "LoxFunction" or @callable[0] == "LoxClass" or Intrinsics.hasIndex(@callable[0])
 end function
 LoxCallableToString = function(callable)
     if @callable[0] == "LoxFunction" then
@@ -1412,7 +1412,7 @@ LoxCallableToString = function(callable)
     if @callable[0] == "LoxClass" then
         return @callable[1]
     end if
-    if @callable[0] == "ClockFn" then
+    if Intrinsics.hasIndex(@callable[0]) then
         return "<native fn>"
     end if
 end function
@@ -1425,8 +1425,9 @@ LoxCallableArity = function(callable)
         if @initializer == null then return 0
         return LoxCallableArity(@initializer)
     end if
-    if @callable[0] == "ClockFn" then
-        return 0
+    if  Intrinsics.hasIndex(@callable[0]) then
+        // return Intrinsics[@callable[0]][1](@callable)
+        return Intrinsics[@callable[0]][1]
     end if
 end function
 // @catchable
@@ -1458,8 +1459,9 @@ LoxCallableCall = function(callable, intrp, arguments)
         end if
         return @instance
     end if
-    if @callable[0] == "ClockFn" then
-        return time
+    if Intrinsics.hasIndex(@callable[0]) then
+        intrinsicFn = @Intrinsics[@callable[0]][2]
+        return intrinsicFn(@intrp, @arguments)
     end if
 end function
 // lox function
@@ -1512,8 +1514,24 @@ end function
 LoxInstanceToString = function(instance)
     return @instance[1][1] + " instance"
 end function
+// intrinsics
+// { "xxx": ["xxxIntrinsic", arity, @callable] }
+// @arity    intrinsics[1] number
+// @callable intrinsics[2] callable
+Intrinsics = {}
+// Add an intrinsic function
+// name: function name
+// arity: number of arguments
+// callable: function to call
+AddIntrinsic = function(_name, arity, callable)
+    Intrinsics[@_name] = [@_name, @arity, @callable]
+end function
+clockIntrinsic = function(intrp, arguments)
+    return time
+end function
+AddIntrinsic("clock", 0, @clockIntrinsic)
 // interpreter
-ClockFn = ["ClockFn"]
+// ClockFn = ["ClockFn"]
 // @globals     intrp[0] Environment
 // @environment intrp[1] Environment
 // @locals      intrp[2] string: {}
@@ -1521,7 +1539,10 @@ NewInterpreter = function
     _globals = NewEnvironment()
     environment =  @_globals
     _locals = {}
-    EnvironmentDefine(@_globals, "clock", @ClockFn)
+    for intrinsicName in Intrinsics.indexes
+        EnvironmentDefine(@_globals, @intrinsicName, @Intrinsics[@intrinsicName])
+    end for
+    // EnvironmentDefine(@_globals, "clock", @ClockFn)
     return [_globals, @environment, @_locals, "Interpreter"]
 end function
 // @catchable
