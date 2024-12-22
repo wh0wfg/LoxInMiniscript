@@ -1,6 +1,22 @@
 # Mlox Extended
 
-## Extended Grammar
+## Extended Features
+### tail call optimization
+```js
+tailCall = [
+    "fun f(n, acc) {",
+    "  if (n <= 1) return acc;",
+    "  return f(n - 1, acc + 1);",
+    "}",
+    "var s = clock();",
+    "print f(1000, 0);",
+    "print clock() - s;",
+];
+runSource(tailCall.join(char(10)))
+```
+Original: **0.971s**
+
+TailCall Optimized: **0.521s**
 ### list expression
 ```js
 var l = [1,2,3,4];

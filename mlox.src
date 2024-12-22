@@ -557,7 +557,9 @@ ParserReturnStatement = function(parser)
     throw = ParserConsume(@parser, @TokenType.SEMICOLON, "Expect ';' after return value.")
     if @throw isa @RuntimeException then return @throw
 
-    return NewReturnStmt(@keyword, @value)
+    // check if the return statement is a tail call
+    isTailCall = value != null and value[0] == "Call"
+    return NewReturnStmt(@keyword, @value, isTailCall)
 end function
 // @throwable
 ParserVarDeclaration = function(parser)
@@ -1033,8 +1035,9 @@ end function
 // return
 // @keyword     stmt[1] Token
 // @value       stmt[2] Expr
-NewReturnStmt = function(keyword, value)
-    return ["Return", @keyword, @value, rnd]
+// @isTailCall  stmt[3] Boolean
+NewReturnStmt = function(keyword, value, isTailCall)
+    return ["Return", @keyword, @value, isTailCall, rnd]
 end function
 // var
 // @name        stmt[1] Token
@@ -1916,7 +1919,58 @@ IntrpVisitPrintStmt = function(intrp, stmt)
     print(IntrpStringify(@value))
 end function
 // @throwable
+IntrpTailCallExecuteBlock = function(intrp, statements)
+    for statement in @statements
+        throw = IntrpExecute(@intrp, @statement)
+        if @throw isa @RuntimeException then return @throw
+    end for
+end function
+// @throwable
 IntrpVisitReturnStmt = function(intrp, stmt)
+    // tail call optimization
+    if @stmt[3] then
+        expr = @stmt[2]
+        callee = IntrpEvaluate(@intrp, @expr[1])
+        if @callee isa @RuntimeException then return @callee
+    
+        arguments = []
+        for argument in @expr[3]
+            value = IntrpEvaluate(@intrp, @argument)
+            if @value isa @RuntimeException then return @value
+            arguments.push(@value)
+        end for
+    
+        if not IsLoxCallable(@callee) then
+            return NewRuntimeError(@expr[2], "Can only call functions and classes.")
+        end if
+    
+        if arguments.len != LoxCallableArity(@callee) then
+            return NewRuntimeError(@expr[2], "Expected " + LoxCallableArity(@callee) + " arguments but got " + arguments.len + ".")
+        end if
+        
+        if @callee[0] == "LoxFunction" then
+            // replace call frame
+            intrp[1] = @callee[2]
+            for i in range(0, callee[1][2].len - 1, 1)
+                EnvironmentDefine(@intrp[1], @callee[1][2][@i][1], @arguments[@i])
+            end for
+
+            throw = IntrpTailCallExecuteBlock(@intrp, @callee[1][3])
+            if @throw isa @Return then
+                if @callee[3] then return EnvironmentGetAt(@callee[2], 0, "this")
+                return NewReturn(@throw.value)
+            end if
+            if @throw isa @RuntimeException then return @throw
+
+            if @callee[3] then return EnvironmentGetAt(@callee[2], 0, "this")
+            return null
+        else
+            throw = LoxCallableCall(@callee, @intrp, @arguments)
+            if @throw isa @RuntimeException then return @throw
+            return NewReturn(@throw)
+        end if
+    end if
+
     value = null
     if @stmt[2] != null then
         value = IntrpEvaluate(@intrp, @stmt[2])
@@ -2402,6 +2456,15 @@ IntrpUnitTests = function
         "print fib(1);",
         "print clock() - s;",
     ]
-    runSource(whileloop.join(char(10)))
+    tallCall = [
+        "fun f(n) {",
+        "  if (n <= 1) return n;",
+        "  return f(n - 1);",
+        "}",
+        "var s = clock();",
+        "print f(1000);",
+        "print clock() - s;",
+    ]
+    runSource(tallCall.join(char(10)))
 end function
-runPrompt()
+IntrpUnitTests
