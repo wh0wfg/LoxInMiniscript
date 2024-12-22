@@ -20,14 +20,14 @@ tail call optimized: **0.521s**
 
 ### else-if
 ```C#
-        "var x = 3;",
-        "if (x == 0) {",
-        "  print ""x is 0"";",
-        "} else if (x == 1) {",
-        "  print ""x is 1"";",
-        "} else {",
-        "  print ""x is not 0 or 1"";",
-        "}",
+var x = 3;
+if (x == 0) {,
+    print "x is 0";
+} else if (x == 1) {
+    print "x is 1";
+} else {,
+    print "x is not 0 or 1";
+}
 ```
 
 ### foreach statement
@@ -131,9 +131,9 @@ Here are possible types of each arugment:
 
 | Extended Type | Type in Miniscript |
 | -----------   | -------            |
-| Intrinsic     | list from  AddIntrinsic|
-| List          | work in progress       |
-| Map           | work in progress       |
+| Intrinsic     | list from AddIntrinsic |
+| List          | list from NewLoxList   |
+| Map           | list from NewLoxMap    |
 
 For simple lox type variables (string, number ....), you can simply treat them as normal miniscript type.
 
