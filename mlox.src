@@ -38,6 +38,8 @@ TokenType = {
 "OR": "OR",
 "PRINT": "PRINT",
 "RETURN": "RETURN",
+"BREAK": "BREAK",
+"CONTINUE": "CONTINUE",
 "SUPER": "SUPER",
 "THIS": "THIS",
 "TRUE": "TRUE",
@@ -60,6 +62,8 @@ keywords = {
     "or": TokenType.OR,
     "print": TokenType.PRINT,
     "return": TokenType.RETURN,
+    "break": TokenType.BREAK,
+    "continue": TokenType.CONTINUE,
     "super": TokenType.SUPER,
     "this": TokenType.THIS,
     "true": TokenType.TRUE,
@@ -462,6 +466,8 @@ ParserStatement = function(parser)
     if ParserMatch(@parser, [@TokenType.IF]) then return ParserIfStatement(@parser)
     if ParserMatch(@parser, [@TokenType.PRINT]) then return ParserPrintStatement(@parser)
     if ParserMatch(@parser, [@TokenType.RETURN]) then return ParserReturnStatement(@parser)
+    if ParserMatch(@parser, [@TokenType.BREAK]) then return ParserBreakStatement(@parser)
+    if ParserMatch(@parser, [@TokenType.CONTINUE]) then return ParserContinueStatement(@parser)
     if ParserMatch(@parser, [@TokenType.DO]) then return ParserDoWhileStatement(@parser)
     if ParserMatch(@parser, [@TokenType.WHILE]) then return ParserWhileStatement(@parser)
     if ParserMatch(@parser, [@TokenType.LEFT_BRACE]) then
@@ -593,6 +599,20 @@ ParserReturnStatement = function(parser)
     // check if the return statement is a tail call
     isTailCall = value != null and value[0] == "Call"
     return NewReturnStmt(@keyword, @value, isTailCall)
+end function
+// @throwable
+ParserBreakStatement = function(parser)
+    keyword = ParserPrevious(@parser)
+    throw = ParserConsume(@parser, @TokenType.SEMICOLON, "Expect ';' after break.")
+    if @throw isa @RuntimeException then return @throw
+    return NewBreakStmt(@keyword)
+end function
+// @throwable
+ParserContinueStatement = function(parser)
+    keyword = ParserPrevious(@parser)
+    throw = ParserConsume(@parser, @TokenType.SEMICOLON, "Expect ';' after continue.")
+    if @throw isa @RuntimeException then return @throw
+    return NewContinueStmt(@keyword)
 end function
 // @throwable
 ParserVarDeclaration = function(parser)
@@ -1048,6 +1068,8 @@ StmtAccept = function(stmt, visitor)
     if @stmt[0] == "If" then return VisitorVisitIfStmt(@visitor, @stmt)
     if @stmt[0] == "Print" then return VisitorVisitPrintStmt(@visitor, @stmt)
     if @stmt[0] == "Return" then return VisitorVisitReturnStmt(@visitor, @stmt)
+    if @stmt[0] == "Break" then return VisitorVisitBreakStmt(@visitor, @stmt)
+    if @stmt[0] == "Continue" then return VisitorVisitContinueStmt(@visitor, @stmt)
     if @stmt[0] == "Var" then return VisitorVisitVarStmt(@visitor, @stmt)
     if @stmt[0] == "Foreach" then return VisitorVisitForeachStmt(@visitor, @stmt)
     if @stmt[0] == "DoWhile" then return VisitorVisitDoWhileStmt(@visitor, @stmt)
@@ -1095,6 +1117,16 @@ end function
 // @isTailCall  stmt[3] Boolean
 NewReturnStmt = function(keyword, value, isTailCall)
     return ["Return", @keyword, @value, isTailCall, rnd]
+end function
+// break
+// @keyword     stmt[1] Token
+NewBreakStmt = function(keyword)
+    return ["Break", @keyword, rnd]
+end function
+// continue
+// @keyword     stmt[1] Token
+NewContinueStmt = function(keyword)
+    return ["Continue", @keyword, rnd]
 end function
 // var
 // @name        stmt[1] Token
@@ -1171,11 +1203,41 @@ VisitorVisitPrintStmt = function(visitor, stmt)
     end if
 end function
 // @throwable
+IntrpVisitContinueStmt = function(intrp, stmt)
+    if not @intrp[3] then
+        return NewRuntimeError(@stmt[1], "Cannot continue outside of a loop.")
+    end if
+    return NewContinue()
+end function
+// @throwable
+IntrpVisitBreakStmt = function(intrp, stmt)
+    if not @intrp[3] then
+        return NewRuntimeError(@stmt[1], "Cannot break outside of a loop.")
+    end if
+    return NewBreak()
+end function
+// @throwable
 VisitorVisitReturnStmt = function(visitor, stmt)
     if @visitor[-1] == "Interpreter" then
         return IntrpVisitReturnStmt(@visitor, @stmt)
     else if @visitor[-1] == "Resolver" then
         return ResolverVisitReturnStmt(@visitor, @stmt)
+    end if
+end function
+// @throwable
+VisitorVisitBreakStmt = function(visitor, stmt)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitBreakStmt(@visitor, @stmt)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitBreakStmt(@visitor, @stmt)
+    end if
+end function
+// @throwable
+VisitorVisitContinueStmt = function(visitor, stmt)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitContinueStmt(@visitor, @stmt)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitContinueStmt(@visitor, @stmt)
     end if
 end function
 // @throwable
@@ -1362,8 +1424,9 @@ ClassType = {
 // @scopes          resolver[1]     string[]
 // @currentFunction resolver[2]     FunctionType
 // @currentClass    resolver[3]     ClassType
+// @isInLoop        resolver[4]     boolean
 NewResolver = function(interpreter)
-    return [interpreter, [], @FunctionType.NONE, @ClassType.NONE, "Resolver"]
+    return [interpreter, [], @FunctionType.NONE, @ClassType.NONE, false, "Resolver"]
 end function
 // @throwable
 ResolverResolve = function(resolver, statements)
@@ -1463,6 +1526,18 @@ ResolverVisitReturnStmt = function(resolver, stmt)
     end if
 end function
 // @throwable
+ResolverVisitBreakStmt = function(resolver, stmt)
+    if not @resolver[4] then
+        LoxErrorTM(@stmt[1], "Cannot break outside of a loop.")
+    end if
+end function
+// @throwable
+ResolverVisitContinueStmt = function(resolver, stmt)
+    if not @resolver[4] then
+        LoxErrorTM(@stmt[1], "Cannot continue outside of a loop.")
+    end if
+end function
+// @throwable
 ResolverVisitVarStmt = function(resolver, stmt)
     ResolverDeclare(@resolver, @stmt[1])
     if @stmt[2] != null then
@@ -1484,8 +1559,11 @@ ResolverVisitForeachStmt = function(resolver, stmt)
 end function
 // @throwable
 ResolverVisitDoWhileStmt = function(resolver, stmt)
+    resolver[4] = true
     throw = ResolverResolveStmt(@resolver, @stmt[2])
     if @throw isa @RuntimeException then return @throw
+    resolver[4] = false
+    
     throw = ResolverResolveExpr(@resolver, @stmt[1])
     if @throw isa @RuntimeException then return @throw
 end function
@@ -1493,8 +1571,11 @@ end function
 ResolverVisitWhileStmt = function(resolver, stmt)
     throw = ResolverResolveExpr(@resolver, @stmt[1])
     if @throw isa @RuntimeException then return @throw
+    
+    resolver[4] = true
     throw = ResolverResolveStmt(@resolver, @stmt[2])
     if @throw isa @RuntimeException then return @throw
+    resolver[4] = false
 end function
 // expr
 // @throwable
@@ -1911,6 +1992,7 @@ AddIntrinsic("clock", 0, @clockIntrinsic)
 // @globals     intrp[0] Environment
 // @environment intrp[1] Environment
 // @locals      intrp[2] string: {}
+// @isInLoop    intrp[3] boolean
 NewInterpreter = function
     _globals = NewEnvironment()
     environment =  @_globals
@@ -1919,7 +2001,7 @@ NewInterpreter = function
         EnvironmentDefine(@_globals, @intrinsicName, @Intrinsics[@intrinsicName])
     end for
     // EnvironmentDefine(@_globals, "clock", @ClockFn)
-    return [_globals, @environment, @_locals, "Interpreter"]
+    return [_globals, @environment, @_locals, false, false, false, "Interpreter"]
 end function
 // @catchable
 Interpret = function(intrp, statements)
@@ -2030,6 +2112,7 @@ IntrpTailCallExecuteBlock = function(intrp, statements)
     end for
 end function
 // @throwable
+
 IntrpVisitReturnStmt = function(intrp, stmt)
     // tail call optimization
     if @stmt[3] then
@@ -2122,18 +2205,26 @@ IntrpVisitForeachStmt = function(intrp, stmt)
 end function
 // @throwable
 IntrpVisitDoWhileStmt = function(intrp, stmt)
+    intrp[3] = true
     throw = IntrpExecute(@intrp, @stmt[2])
     while IntrpIsTruthy(IntrpEvaluate(@intrp, @stmt[1]))
         throw = IntrpExecute(@intrp, @stmt[2])
+        if @throw isa @Break then break
+        if @throw isa @Continue then continue
         if @throw isa @RuntimeException then return @throw
     end while
+    intrp[3] = false
 end function
 // @throwable
 IntrpVisitWhileStmt = function(intrp, stmt)
+    intp[3] = true
     while IntrpIsTruthy(IntrpEvaluate(@intrp, @stmt[1]))
         throw = IntrpExecute(@intrp, @stmt[2])
+        if @throw isa @Break then break
+        if @throw isa @Continue then continue
         if @throw isa @RuntimeException then return @throw
     end while
+    intrp[3] = false
 end function
 // @throwable
 IntrpVisitAssignExpr = function(intrp, expr)
@@ -2503,6 +2594,16 @@ end function
 ParseError = new RuntimeException
 NewParseError = function
     ret = new @ParseError
+    return @ret
+end function
+Break = new RuntimeException
+NewBreak = function
+    ret = new @Break
+    return @ret
+end function
+Continue = new RuntimeException
+NewContinue = function
+    ret = new @Continue
     return @ret
 end function
 Return = new RuntimeException

@@ -14,9 +14,9 @@ tailCall = [
 ];
 runSource(tailCall.join(char(10)))
 ```
-Original: **0.971s**
+original: **0.971s**
 
-TailCall Optimized: **0.521s**
+tail call optimized: **0.521s**
 
 ### foreach statement
 ```C#
@@ -33,6 +33,25 @@ do {
     print i;
     i = i + 1;
 } while (i <= 0);
+```
+
+### break statement
+```c#
+var l = [1,2,3,4];
+foreach (var i in l) {
+    print i;
+    break;
+}
+```
+
+### continue statement
+```c#
+var l = [1,2,3,4];
+foreach (var i in l) {
+    print i;
+    continue;
+    print -1;
+}
 ```
 
 ### list expression
