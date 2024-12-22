@@ -18,6 +18,14 @@ original: **0.971s**
 
 tail call optimized: **0.521s**
 
+### lambda
+```C#
+var f = [lambda (x) {
+    return x + 1;
+}];
+print f[0](1);
+```
+
 ### else-if
 ```C#
 var x = 3;

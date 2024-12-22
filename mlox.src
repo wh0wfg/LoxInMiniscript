@@ -30,6 +30,7 @@ TokenType = {
 "ELSE": "ELSE",
 "FALSE": "FALSE",
 "FUN": "FUN",
+"LAMBDA": "LAMBDA",
 "FOREACH": "FOREACH",
 "IN": "IN",
 "FOR": "FOR",
@@ -57,6 +58,7 @@ keywords = {
     "in": TokenType.IN,
     "for": TokenType.FOR,
     "fun": TokenType.FUN,
+    "lambda": TokenType.LAMBDA,
     "if": TokenType.IF,
     "nil": TokenType.NIL,
     "or": TokenType.OR,
@@ -263,6 +265,7 @@ ExprAccept = function(expr, visitor)
     if case == "Slice" then return VisitorVisitSliceExpr(@visitor, @expr)
     if case == "Grouping" then return VisitorVisitGroupingExpr(@visitor, @expr)
     if case == "Literal" then return VisitorVisitLiteralExpr(@visitor, @expr)
+    if case == "Lambda" then return VisitorVisitLambdaExpr(@visitor, @expr)
     if case == "List" then return VisitorVisitListExpr(@visitor, @expr)
     if case == "Map" then return VisitorVisitMapExpr(@visitor, @expr)
     if case == "Logical" then return VisitorVisitLogicalExpr(@visitor, @expr)
@@ -367,6 +370,13 @@ end function
 // @name        expr[1] Token
 NewVariableExpr = function(_name)
     return ["Variable", @_name, rnd]
+end function
+// lambda
+// @name        expr[1] Token
+// @parameters  expr[2] Token[]
+// @body        expr[3] Stmt[]
+NewLambdaExpr = function(_name, parameters, body)
+    return ["Lambda", @_name, @parameters, @body, rnd]
 end function
 // list
 // @values      expr[1] Expr[]
@@ -953,6 +963,44 @@ ParserPrimary = function(parser)
 
     if ParserMatch(@parser, [@TokenType.THIS]) then return NewThisExpr(ParserPrevious(@parser))
 
+    // lambda(){}
+    if ParserMatch(@parser, [@TokenType.LAMBDA]) then
+        _name = ParserPrevious(@parser)
+        throw = ParserConsume(@parser, @TokenType.LEFT_PAREN, "Expect '(' after lambda.")
+        if @throw isa @RuntimeException then return @throw
+
+        parameters = []
+        if not ParserCheck(@parser, @TokenType.RIGHT_PAREN) then
+            // do-while
+            if parameters.len >= 255 then
+                ParserError(ParserPeek(@parser), "Cannot have more than 255 parameters.")
+            end if
+            throw = ParserConsume(@parser, @TokenType.IDENTIFIER, "Expect parameter name.")
+            if @throw isa @RuntimeException then return @throw
+            parameters.push(@throw)
+            while ParserMatch(@parser, [@TokenType.COMMA])
+                if parameters.len >= 255 then
+                    ParserError(ParserPeek(@parser), "Cannot have more than 255 parameters.")
+                end if
+                throw = ParserConsume(@parser, @TokenType.IDENTIFIER, "Expect parameter name.")
+                if @throw isa @RuntimeException then return @throw
+                parameters.push(@throw)
+            end while
+        end if
+
+        throw = ParserConsume(@parser, @TokenType.RIGHT_PAREN, "Expect ')' after lambda parameters.")
+        if @throw isa @RuntimeException then return @throw
+
+        throw = ParserConsume(@parser, @TokenType.LEFT_BRACE, "Expect '{' before lambda body.")
+        if @throw isa @RuntimeException then return @throw
+
+        body = ParserBlock(@parser)
+        if @body isa @RuntimeException then return @body
+
+        return NewLambdaExpr(@_name, @parameters, @body)
+    end if
+
+
     if ParserMatch(@parser, [@TokenType.IDENTIFIER]) then return NewVariableExpr(ParserPrevious(@parser))
 
     if ParserMatch(@parser, [@TokenType.LEFT_PAREN]) then
@@ -1343,6 +1391,14 @@ VisitorVisitLiteralExpr = function(visitor, expr)
     end if
 end function
 // @throwable
+VisitorVisitLambdaExpr = function(visitor, expr)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitLambdaExpr(@visitor, @expr)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitLambdaExpr(@visitor, @expr)
+    end if
+end function
+// @throwable
 VisitorVisitListExpr = function(visitor, expr)
     if @visitor[-1] == "Interpreter" then
         return IntrpVisitListExpr(@visitor, @expr)
@@ -1637,6 +1693,10 @@ ResolverVisitGroupingExpr = function(resolver, expr)
 end function
 ResolverVisitLiteralExpr = function(resolver, expr)
     // do nothing
+end function
+// @throwable
+ResolverVisitLambdaExpr = function(resolver, expr)
+    ResolverResolveFunction(@resolver, @expr, @FunctionType.FUNCTION)
 end function
 // @throwable
 ResolverVisitListExpr = function(resolver, expr)
@@ -2414,6 +2474,10 @@ IntrpVisitLiteralExpr = function(intrp, expr)
     return @expr[1]
 end function
 // @throwable
+IntrpVisitLambdaExpr = function(intrp, expr)
+    return NewLoxFunction(@expr, @intrp[1], false)
+end function
+// @throwable
 IntrpVisitListExpr = function(intrp, expr)
     _values = []
     for value in @expr[1]
@@ -2738,6 +2802,12 @@ IntrpUnitTests = function
         "  print ""x is not 0 or 1"";",
         "}",
     ]
-    runSource(elseif.join(char(10)))
+    lambda = [
+        "var f = [lambda (x) {",
+        "  return x + 1;",
+        "}];",
+        "print f[0](1);",
+    ]
+    runSource(lambda.join(char(10)))
 end function
 IntrpUnitTests
