@@ -118,7 +118,7 @@ ScannerString = function(scanner)
         ScannerAdvance(@scanner)
     end while    
     if ScannerIsAtEnd(@scanner) then
-        Error(@scanner[4], "Unterminated string.")
+        LoxErrorLM(@scanner[4], "Unterminated string.")
         return
     end if
 
@@ -249,6 +249,8 @@ ExprAccept = function(expr, visitor)
     if case == "Binary" then return VisitorVisitBinaryExpr(@visitor, @expr)
     if case == "Call" then return VisitorVisitCallExpr(@visitor, @expr)
     if case == "Get" then return VisitorVisitGetExpr(@visitor, @expr)
+    if case == "Subscript" then return VisitorVisitSubscriptExpr(@visitor, @expr)
+    if case == "Slice" then return VisitorVisitSliceExpr(@visitor, @expr)
     if case == "Grouping" then return VisitorVisitGroupingExpr(@visitor, @expr)
     if case == "Literal" then return VisitorVisitLiteralExpr(@visitor, @expr)
     if case == "List" then return VisitorVisitListExpr(@visitor, @expr)
@@ -289,15 +291,17 @@ end function
 // subscript
 // @object      expr[1] Expr
 // @index       expr[2] Expr
-NewSubscriptExpr = function(object, index)
-    return ["Subscript", @object, @index, rnd]
+// @name        expr[3] Token
+NewSubscriptExpr = function(object, index, _name)
+    return ["Subscript", @object, @index, @_name, rnd]
 end function
 // slice
 // @object      expr[1] Expr
 // @start       expr[2] Expr
 // @end         expr[3] Expr
-NewSliceExpr = function(object, start, _end)
-    return ["Slice", @object, @start, @_end, rnd]
+// @name        expr[4] Token
+NewSliceExpr = function(object, start, _end, _name)
+    return ["Slice", @object, @start, @_end, @_name, rnd]
 end function
 // group
 // @expression  expr[1] Expr
@@ -799,13 +803,13 @@ ParserCall = function(parser)
             if ParserMatch(@parser, [@TokenType.COLON]) then
                 // slice without end
                 if ParserMatch(@parser, [@TokenType.RIGHT_SQUARE]) then
-                    expr = NewSliceExpr(@expr, null, null)
+                    expr = NewSliceExpr(@expr, null, null, ParserPrevious(@parser))
                 else
                     _end = ParserExpression(@parser)
                     if @_end isa @RuntimeException then return @_end
                     throw = ParserConsume(@parser, @TokenType.RIGHT_SQUARE, "Expect ']' after slice.")
                     if @throw isa @RuntimeException then return @throw
-                    expr = NewSliceExpr(@expr, null, @_end)
+                    expr = NewSliceExpr(@expr, null, @_end, @throw)
                 end if
             else
                 index = ParserExpression(@parser)
@@ -814,18 +818,18 @@ ParserCall = function(parser)
                 if ParserMatch(@parser, [@TokenType.COLON]) then
                     // slice without end
                     if ParserMatch(@parser, [@TokenType.RIGHT_SQUARE]) then
-                        expr = NewSliceExpr(@expr, @index, null)
+                        expr = NewSliceExpr(@expr, @index, null, ParserPrevious(@parser))
                     else
                         _end = ParserExpression(@parser)
                         if @_end isa @RuntimeException then return @_end
                         throw = ParserConsume(@parser, @TokenType.RIGHT_SQUARE, "Expect ']' after slice.")
                         if @throw isa @RuntimeException then return @throw
-                        expr = NewSliceExpr(@expr, @index, @_end)
+                        expr = NewSliceExpr(@expr, @index, @_end, @throw)
                     end if
                 else 
                     throw = ParserConsume(@parser, @TokenType.RIGHT_SQUARE, "Expect ']' after index.")
                     if @throw isa @RuntimeException then return @throw
-                    expr = NewSubscriptExpr(@expr, @index)
+                    expr = NewSubscriptExpr(@expr, @index, @throw)
                 end if
             end if
         else
@@ -1393,6 +1397,26 @@ ResolverVisitGetExpr = function(resolver, expr)
     if @throw isa @RuntimeException then return @throw
 end function
 // @throwable
+ResolverVisitSubscriptExpr = function(resolver, expr)
+    throw = ResolverResolveExpr(@resolver, @expr[1])
+    if @throw isa @RuntimeException then return @throw
+    throw = ResolverResolveExpr(@resolver, @expr[2])
+    if @throw isa @RuntimeException then return @throw
+end function
+// @throwable
+ResolverVisitSliceExpr = function(resolver, expr)
+    throw = ResolverResolveExpr(@resolver, @expr[1])
+    if @throw isa @RuntimeException then return @throw
+    if @expr[2] != null then
+        throw = ResolverResolveExpr(@resolver, @expr[2])
+        if @throw isa @RuntimeException then return @throw
+    end if
+    if @expr[3] != null then
+        throw = ResolverResolveExpr(@resolver, @expr[3])
+        if @throw isa @RuntimeException then return @throw
+    end if
+end function
+// @throwable
 ResolverVisitGroupingExpr = function(resolver, expr)
     throw = ResolverResolveExpr(@resolver, @expr[1])
     if @throw isa @RuntimeException then return @throw
@@ -1665,7 +1689,7 @@ end function
 // @klass  instance[1] LoxClass
 // @fields instance[2] string: Object
 NewLoxInstance = function(klass)
-    return ["LoxInstance", @klass, {}]
+    return ["LoxInstance", @klass, {}, rnd]
 end function
 // @throwable
 LoxInstanceGet = function(instance, _name)
@@ -1682,6 +1706,53 @@ LoxInstanceSet = function(instance, _name, value)
 end function
 LoxInstanceToString = function(instance)
     return @instance[1][1] + " instance"
+end function
+// lox list
+// @values list[1] Object[]
+NewLoxList = function(_values, _rnd=null)
+    if @_rnd == null then return ["LoxList", @_values, rnd]
+    return ["LoxList", @_values, _rnd]
+end function
+// @throwable
+LoxListInbounds = function(_list, index, _name)
+    if @index < 0 then @index = _list[1].len + @index
+    if @index < 0 or @index >= _list[1].len then
+        return NewRuntimeError(@_name, "Index " + @index + " out of bounds.")
+    end if
+end function
+// @throwable
+LoxListSet = function(_list, index, value, _name)
+    if @index < 0 then @index = _list[1].len + @index
+
+    throw = LoxListInbounds(@_list, @index, @_name)
+    if @throw isa @RuntimeException then return @throw
+
+    list[1][@index] = @value  
+end function
+// @throwable
+LoxListGet = function(_list, index, _name)
+    if @index < 0 then index = _list[1].len + @index
+
+    throw = LoxListInbounds(@_list, @index, @_name)
+    if @throw isa @RuntimeException then return @throw
+
+    return @_list[1][@index]
+end function
+// lox map
+// @values map[1] string: Object
+NewLoxMap = function(_values)
+    return ["LoxMap", @_values, rnd]
+end function
+LoxMapSet = function(_map, key, value)
+    _map[1][@key] = @value
+end function
+// @throwable
+LoxMapGet = function(_map, key, _name)
+    if _map[1].hasIndex(@key) then
+        return @_map[1][@key]
+    end if
+
+    return NewRuntimeError(@_name, "Key " + @key + " not found in map.")
 end function
 // intrinsics
 // { "xxx": ["xxxIntrinsic", arity, @callable] }
@@ -1945,6 +2016,76 @@ IntrpVisitGetExpr = function(intrp, expr)
     return NewRuntimeError(@expr[3], "Only instances have properties.")
 end function
 // @throwable
+IntrpVisitSubscriptExpr = function(intrp, expr)
+    object = IntrpEvaluate(@intrp, @expr[1])
+    if @object isa @RuntimeException then return @object
+    index = IntrpEvaluate(@intrp, @expr[2])
+    if @index isa @RuntimeException then return @index
+
+    
+    if @object[0] == "LoxList" then
+        return LoxListGet(@object, @index, @expr[3])
+    end if
+    if @object[0] == "LoxMap" then
+        return LoxMapGet(@object, @index, @expr[3])
+    end if
+    if @object isa string then
+        if @index < 0 then index = object.len + @index
+        if @index < 0 or @index >= object.len then
+            return NewRuntimeError(@expr[3], "Index " + @index + " out of bounds.")
+        end if
+        return @object[@index]
+    end if
+    return NewRuntimeError(@expr[3], "Subscript not supported on " + @object[0] + ".")
+end function
+// @throwable
+IntrpVisitSliceExpr = function(intrp, expr)
+    object = IntrpEvaluate(@intrp, @expr[1])
+    if @object isa @RuntimeException then return @object
+    if not (@object[0] == "LoxList" or @object isa string) then
+        
+    end if
+    start = 0
+    if @expr[2] != null then
+        start = IntrpEvaluate(@intrp, @expr[2])
+        if @start isa @RuntimeException then return @start
+    end if
+
+    if @object[0] == "LoxList" then
+        _end = object[1].len
+        if @expr[3] != null then
+            _end = IntrpEvaluate(@intrp, @expr[3])
+            if @_end isa @RuntimeException then return @_end
+        end if
+
+        throw = LoxListInbounds(@object, @start, @expr[2])
+        if @throw isa @RuntimeException then return @throw
+        throw = LoxListInbounds(@object, @_end - 1, @expr[3])
+        if @throw isa @RuntimeException then return @throw
+        return NewLoxList(@object[1][@start:@_end], @object[2])
+    end if
+
+    if @object isa string then
+        _end = object.len
+        if @expr[3] != null then
+            _end = IntrpEvaluate(@intrp, @expr[3])
+            if @_end isa @RuntimeException then return @_end
+        end if
+
+        if @start < 0 then @start = object.len + @start
+        if @start < 0 or @start >= object.len then
+            return NewRuntimeError(@expr[2], "Index " + @start + " out of bounds.")
+        end if
+        if @_end < 0 then @_end = object.len + @_end
+        if @_end < 0 or @_end > object.len then
+            return NewRuntimeError(@expr[3], "Index " + @_end + " out of bounds.")
+        end if
+        return @object[@start:@_end]
+    end if
+
+    return NewRuntimeError(@expr[4], "Slice not supported on " + @object[0] + ".")
+end function
+// @throwable
 IntrpVisitGroupingExpr = function(intrp, expr)
     return IntrpEvaluate(@intrp, @expr[1])
 end function
@@ -1959,7 +2100,7 @@ IntrpVisitListExpr = function(intrp, expr)
         if @value isa @RuntimeException then return @value
         _values.push(@value)
     end for
-    return @_values
+    return NewLoxList(@_values)
 end function
 // @throwable
 IntrpVisitMapExpr = function(intrp, expr)
@@ -1973,7 +2114,7 @@ IntrpVisitMapExpr = function(intrp, expr)
         if @value isa @RuntimeException then return @value
         map[@key] = @value
     end for
-    return @map
+    return NewLoxMap(@map)
 end function
 // @throwable
 IntrpVisitLogicalExpr = function(intrp, expr)
@@ -2115,7 +2256,7 @@ NewReturn = function(value)
     return @ret
 end function
 LoxRuntimeError = function(error)
-    print(@error.message + "\n[line " + @error.token[3] + "]")
+    print("[line " + @error.token[3] + "] " + @error.message)
     globals.hadRuntimeError = true
 end function
 // run
