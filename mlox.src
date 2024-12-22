@@ -1909,6 +1909,8 @@ end function
 // @catchable
 // @throwable
 LoxCallableCall = function(callable, intrp, arguments)
+    preIsInLoop = @intrp[3]
+    intrp[3] = false
     if @callable[0] == "LoxFunction" then
         environment = NewEnvironment(@callable[2])
         for i in range(0, callable[1][2].len - 1, 1)
@@ -1916,6 +1918,9 @@ LoxCallableCall = function(callable, intrp, arguments)
         end for
         
         throw = IntrpExecuteBlock(@intrp, @callable[1][3], @environment)
+
+        intrp[3] = @preIsInLoop
+
         if @throw isa @Return then
             if @callable[3] then return EnvironmentGetAt(@callable[2], 0, "this")
             return @throw.value
@@ -1931,12 +1936,17 @@ LoxCallableCall = function(callable, intrp, arguments)
         if @initializer != null then
             bind = LoxFunctionBind(@initializer, @instance)
             throw = LoxCallableCall(@bind, @intrp, @arguments)
-            if @throw isa @RuntimeException then return @throw
+            if @throw isa @RuntimeException then 
+                intrp[3] = @preIsInLoop
+                return @throw
+            end if
         end if
+        intrp[3] = @preIsInLoop
         return @instance
     end if
     if Intrinsics.hasIndex(@callable[0]) then
         intrinsicFn = @Intrinsics[@callable[0]][2]
+        intrp[3] = @preIsInLoop
         return intrinsicFn(@intrp, @arguments)
     end if
 end function
@@ -2178,7 +2188,6 @@ IntrpTailCallExecuteBlock = function(intrp, statements)
     end for
 end function
 // @throwable
-
 IntrpVisitReturnStmt = function(intrp, stmt)
     // tail call optimization
     if @stmt[3] then
@@ -2283,7 +2292,7 @@ IntrpVisitDoWhileStmt = function(intrp, stmt)
 end function
 // @throwable
 IntrpVisitWhileStmt = function(intrp, stmt)
-    intp[3] = true
+    intrp[3] = true
     while IntrpIsTruthy(IntrpEvaluate(@intrp, @stmt[1]))
         throw = IntrpExecute(@intrp, @stmt[2])
         if @throw isa @Break then break
@@ -2792,6 +2801,20 @@ IntrpUnitTests = function
         "  i = i + 1;",
         "} while (i < 5);",
     ]
+    breakContinue = [
+        "var i = 0;",
+        "while (i < 5) {",
+        "  print i;",
+        "  i = i + 1;",
+        "  if (i == 3) break;",
+        "}",
+        "i = 0;",
+        "while (i < 5) {",
+        "  i = i + 1;",
+        "  if (i == 3) continue;",
+        "  print i;",
+        "}",
+    ]
     elseif = [
         "var x = 3;",
         "if (x == 0) {",
@@ -2808,6 +2831,6 @@ IntrpUnitTests = function
         "}];",
         "print f[0](1);",
     ]
-    runSource(lambda.join(char(10)))
+    runSource(breakContinue.join(char(10)))
 end function
 IntrpUnitTests
