@@ -2360,7 +2360,7 @@ EnvironmentTostring = function(env)
 end function
 // lox callable
 IsLoxCallable = function(callable)
-    return @callable[0] == "LoxFunction" or @callable[0] == "LoxClass" or Intrinsics.hasIndex(@callable[0])
+    return @callable isa funcRef or @callable[0] == "LoxFunction" or @callable[0] == "LoxClass" or Intrinsics.hasIndex(@callable[0]) or @callable[0] == "StrIntr"
 end function
 LoxCallableToString = function(callable)
     if @callable[0] == "LoxFunction" then
@@ -2381,6 +2381,9 @@ LoxCallableArity = function(callable)
         initializer = LoxClassFindMethod(@callable, "init")
         if @initializer == null then return 0
         return LoxCallableArity(@initializer)
+    end if
+    if @callable[0] == "StrIntr" then
+        return @callable[1]
     end if
     if  Intrinsics.hasIndex(@callable[0]) then
         // return Intrinsics[@callable[0]][1](@callable)
@@ -2431,6 +2434,10 @@ LoxCallableCall = function(callable, intrp, arguments)
         intrp[3] = @preIsInLoop
         intrp[4] = @preIsInSwitch
         return @instance
+    end if
+    if @callable[0] == "StrIntr" then
+        ret = @callable[2]
+        return ret(@callable[-1], @intrp, @arguments)
     end if
     if Intrinsics.hasIndex(@callable[0]) then
         intrinsicFn = @Intrinsics[@callable[0]][2]
@@ -2537,7 +2544,52 @@ LoxMapGet = function(_map, key, _name)
     return NewRuntimeError(@_name, "Key " + @key + " not found in map.")
 end function
 // intrinsics
-// { "xxx": ["xxxIntrinsic", arity, @callable] }
+StrIntrs = {}
+// NOTE: _str will be dynamically pushed to the end of list
+AddStrIntrs = function(_name, arity, callable, isProperty=null)
+    if @isProperty == null then isProperty = false
+    StrIntrs[@_name] = ["StrIntr", @arity, @callable, @isProperty]
+end function
+strLength = function(_str, intrp, arguments)
+    return _str.len
+end function
+AddStrIntrs("Length", null, @strLength, true)
+strToUpper = function(_str, intrp, arguments)
+    return _str.upper
+end function
+AddStrIntrs("ToUpper", 0, @strToUpper)
+strToLower = function(_str, intrp, arguments)
+    return _str.lower
+end function
+AddStrIntrs("ToLower", 0, @strToLower)
+strTrim = function(_str, intrp, arguments)
+    return _str.trim
+end function
+AddStrIntrs("Trim", 0, @strTrim)
+strSubstring = function(_str, intrp, arguments)
+    return _str[@arguments[0]: @arguments[0]+@arguments[1]]
+end function
+AddStrIntrs("Substring", 2, @strSubstring)
+strContains = function(_str, intrp, arguments)
+    return _str.indexOf(@arguments[0]) != null
+end function
+AddStrIntrs("Contains", 1, @strContains)
+strReplace = function(_str, intrp, arguments)
+    return _str.replace(@arguments[0], @arguments[1])
+end function
+AddStrIntrs("Replace", 2, @strReplace)
+strIndexOf = function(_str, intrp, arguments)
+    return _str.indexOf(@arguments[0])
+end function
+AddStrIntrs("IndexOf", 1, @strIndexOf)
+strSplit = function(_str, intrp, arguments)
+    return _str.split(@arguments[0])
+end function
+strJoin = function(_str, intrp, arguments)
+    return @arguments[0][1].join(@_str)
+end function
+AddStrIntrs("Join", 1, @strJoin)
+// { "xxx": ["xxx", arity, @callable] }
 // @arity    intrinsics[1] number
 // @callable intrinsics[2] callable
 Intrinsics = {}
@@ -3000,6 +3052,19 @@ IntrpVisitGetExpr = function(intrp, expr)
     object = IntrpEvaluate(@intrp, @expr[1])
     if @object isa @RuntimeException then return @object
 
+    if @object isa string then
+        if StrIntrs.hasIndex(@expr[2][1]) then
+            strIntr = @StrIntrs[@expr[2][1]]
+            if @strIntr[3] then 
+                ret = @strIntr[2]
+                return ret(@object, @intrp, null)
+            else
+                strIntr.push(@object)
+                return @strIntr
+            end if
+        end if
+        return NewRuntimeError(@expr[2], "String has no property '" + @expr[2][1] + "'.")
+    end if
     if @object[0] == "LoxInstance" then
         return LoxInstanceGet(@object, @expr[2])
         // return @object[1][@expr[3][1]]
@@ -3491,6 +3556,11 @@ IntrpUnitTests = function
         "var x = 3;",
         "print x == 3 ? ""x is 3"" : ""x is not 3"";",
     ]
-    runSource(augOprations.join(char(10)))
+    intrinsic = [
+		"var a = ""abcdefg"";",
+        "var s= 1;",
+		"a.Substring(s, 1+1);",
+    ]
+    runSource(intrinsic.join(char(10)))
 end function
 IntrpUnitTests
