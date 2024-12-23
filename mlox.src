@@ -37,6 +37,10 @@ TokenType = {
 "SWITCH": "SWITCH",
 "CASE": "CASE",
 "DEFAULT": "DEFAULT",
+"TRY": "TRY",
+"CATCH": "CATCH",
+"FINALLY": "FINALLY",
+"THROW": "THROW",
 "IF": "IF",
 "NIL": "NIL",
 "OR": "OR",
@@ -65,6 +69,10 @@ keywords = {
     "switch": TokenType.SWITCH,
     "case": TokenType.CASE,
     "default": TokenType.DEFAULT,
+    "try": TokenType.TRY,
+    "catch": TokenType.CATCH,
+    "finally": TokenType.FINALLY,
+    "throw": TokenType.THROW,
     "if": TokenType.IF,
     "nil": TokenType.NIL,
     "or": TokenType.OR,
@@ -480,6 +488,8 @@ ParserStatement = function(parser)
     if ParserMatch(@parser, [@TokenType.FOREACH]) then return ParserForeachStatement(@parser)
     if ParserMatch(@parser, [@TokenType.FOR]) then return ParserForStatement(@parser)
     if ParserMatch(@parser, [@TokenType.SWITCH]) then return ParserSwitchStatement(@parser)
+    if ParserMatch(@parser, [@TokenType.TRY]) then return ParserTryStatement(@parser)
+    if ParserMatch(@parser, [@TokenType.THROW]) then return ParserThrowStatement(@parser)
     if ParserMatch(@parser, [@TokenType.IF]) then return ParserIfStatement(@parser)
     if ParserMatch(@parser, [@TokenType.PRINT]) then return ParserPrintStatement(@parser)
     if ParserMatch(@parser, [@TokenType.RETURN]) then return ParserReturnStatement(@parser)
@@ -632,6 +642,75 @@ ParserSwitchStatement = function(parser)
     if @throw isa @RuntimeException then return @throw
 
     return NewSwitchStmt(@swictchValue, @conditions, @bodies, @default)
+end function
+// @throwable
+ParserTryStatement = function(parser)
+    throw = ParserConsume(@parser, @TokenType.LEFT_BRACE, "Expect '{' after 'try'.")
+    if @throw isa @RuntimeException then return @throw
+
+    tryBody = ParserBlock(@parser)
+    if @tryBody isa @RuntimeException then return @tryBody
+
+    catchValue = null
+    catchBody = null
+    finallyBody = null
+    if ParserMatch(@parser, [@TokenType.CATCH]) then
+        if ParserCheck(@parser, @TokenType.LEFT_BRACE) then
+            throw = ParserConsume(@parser, @TokenType.LEFT_BRACE, "Expect '{' after 'catch'.")
+            if @throw isa @RuntimeException then return @throw
+    
+            catchBody = ParserBlock(@parser)
+            if @catchBody isa @RuntimeException then return @catchBody
+        else
+            throw = ParserConsume(@parser, @TokenType.LEFT_PAREN, "Expect '(' after 'catch'.")
+            if @throw isa @RuntimeException then return @throw
+    
+            throw = ParserConsume(@parser, @TokenType.VAR, "Expect 'var' after 'catch'.")
+            if @throw isa @RuntimeException then return @throw
+    
+            catchValue = ParserConsume(@parser, @TokenType.IDENTIFIER, "Expect identifier after 'catch'.")
+            if @catchValue isa @RuntimeException then return @catchValue
+    
+            throw = ParserConsume(@parser, @TokenType.RIGHT_PAREN, "Expect ')' after catch value.")
+            if @throw isa @RuntimeException then return @throw
+    
+            throw = ParserConsume(@parser, @TokenType.LEFT_BRACE, "Expect '{' after 'catch'.")
+            if @throw isa @RuntimeException then return @throw
+    
+            catchBody = ParserBlock(@parser)
+            if @catchBody isa @RuntimeException then return @catchBody
+        end if
+    end if
+
+    if ParserMatch(@parser, [@TokenType.FINALLY]) then
+        throw = ParserConsume(@parser, @TokenType.LEFT_BRACE, "Expect '{' after 'finally'.")
+        if @throw isa @RuntimeException then return @throw
+
+        finallyBody = ParserBlock(@parser)
+        if @finallyBody isa @RuntimeException then return @finallyBody
+    end if
+
+    if @catchBody == null and @finallyBody == null then
+        ParserError(ParserPeek(@parser), "Expect 'catch' or 'finally' after 'try'.")
+    end if
+
+    if @tryBody != null then tryBody = NewBlockStmt(@tryBody)
+
+    if @catchBody != null then catchBody = NewBlockStmt(@catchBody)
+
+    if @finallyBody != null then finallyBody = NewBlockStmt(@finallyBody)
+
+    return NewTryStmt(@tryBody, @catchValue, @catchBody, @finallyBody)
+end function
+// @throwable
+ParserThrowStatement = function(parser)
+    value = ParserExpression(@parser)
+    if @value isa @RuntimeException then return @value
+
+    throw = ParserConsume(@parser, @TokenType.SEMICOLON, "Expect ';' after throw value.")
+    if @throw isa @RuntimeException then return @throw
+
+    return NewThrowStmt(@value)
 end function
 // @throwable
 ParserIfStatement = function(parser)
@@ -1192,6 +1271,8 @@ StmtAccept = function(stmt, visitor)
     if @stmt[0] == "Function" then return VisitorVisitFunctionStmt(@visitor, @stmt)
     if @stmt[0] == "If" then return VisitorVisitIfStmt(@visitor, @stmt)
     if @stmt[0] == "Switch" then return VisitorVisitSwitchStmt(@visitor, @stmt)
+    if @stmt[0] == "Try" then return VisitorVisitTryStmt(@visitor, @stmt)
+    if @stmt[0] == "Throw" then return VisitorVisitThrowStmt(@visitor, @stmt)
     if @stmt[0] == "Print" then return VisitorVisitPrintStmt(@visitor, @stmt)
     if @stmt[0] == "Return" then return VisitorVisitReturnStmt(@visitor, @stmt)
     if @stmt[0] == "Break" then return VisitorVisitBreakStmt(@visitor, @stmt)
@@ -1232,6 +1313,19 @@ end function
 // @default     stmt[4] Stmt[]
 NewSwitchStmt = function(value, conditions, bodies, default)
     return ["Switch", @value, @conditions, @bodies, @default, rnd]
+end function
+// try
+// @tryBody     stmt[1] NewBlockStmt
+// @catchValue  stmt[2] Token
+// @catchBody   stmt[3] NewBlockStmt
+// @finallyBody stmt[4] NewBlockStmt
+NewTryStmt = function(tryBody, catchValue, catchBody, finallyBody)
+    return ["Try", @tryBody, @catchValue, @catchBody, @finallyBody, rnd]
+end function
+// throw
+// @value       stmt[1] Expr
+NewThrowStmt = function(value)
+    return ["Throw", @value, rnd]
 end function
 // if
 // @condition   stmt[1] Expr
@@ -1334,6 +1428,22 @@ VisitorVisitSwitchStmt = function(visitor, stmt)
         return IntrpVisitSwitchStmt(@visitor, @stmt)
     else if @visitor[-1] == "Resolver" then
         return ResolverVisitSwitchStmt(@visitor, @stmt)
+    end if
+end function
+// @throwable
+VisitorVisitTryStmt = function(visitor, stmt)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitTryStmt(@visitor, @stmt)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitTryStmt(@visitor, @stmt)
+    end if
+end function
+// @throwable
+VisitorVisitThrowStmt = function(visitor, stmt)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitThrowStmt(@visitor, @stmt)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitThrowStmt(@visitor, @stmt)
     end if
 end function
 // @throwable
@@ -1686,6 +1796,36 @@ ResolverVisitSwitchStmt = function(resolver, stmt)
     end if
 end function
 // @throwable
+ResolverVisitTryStmt = function(resolver, stmt)
+    throw = ResolverResolve(@resolver, @stmt[1])
+    if @throw isa @RuntimeException then return @throw
+
+    if @stmt[3] != null then
+        ResolverBeginScope(@resolver)
+        if @stmt[2] != null then
+            ResolverDeclare(@resolver, @stmt[2])
+            ResolverDefine(@resolver, @stmt[2])
+        end if
+
+        for statement in @stmt[3][1]
+            throw = ResolverResolveStmt(@resolver, @statement)
+            if @throw isa @RuntimeException then return @throw
+        end for
+
+        ResolverEndScope(@resolver)
+    end if
+
+    if @stmt[4] != null then
+        throw = ResolverResolve(@resolver, @stmt[4])
+        if @throw isa @RuntimeException then return @throw
+    end if
+end function
+// @throwable
+ResolverVisitThrowStmt = function(resolver, stmt)
+    throw = ResolverResolveExpr(@resolver, @stmt[1])
+    if @throw isa @RuntimeException then return @throw
+end function
+// @throwable
 ResolverVisitPrintStmt = function(resolver, stmt)
     throw = ResolverResolveExpr(@resolver, @stmt[1])
     if @throw isa @RuntimeException then return @throw
@@ -1723,11 +1863,11 @@ ResolverVisitVarStmt = function(resolver, stmt)
 end function
 // @throwable
 ResolverVisitForeachStmt = function(resolver, stmt)
-    ResolverDeclare(@resolver, @stmt[1])
-    ResolverDefine(@resolver, @stmt[1])
     throw = ResolverResolveExpr(@resolver, @stmt[2])
     if @throw isa @RuntimeException then return @throw
     ResolverBeginScope(@resolver)
+    ResolverDeclare(@resolver, @stmt[1])
+    ResolverDefine(@resolver, @stmt[1])
     throw = ResolverResolveStmt(@resolver, @stmt[3])
     if @throw isa @RuntimeException then return @throw
     ResolverEndScope(@resolver)
@@ -2335,6 +2475,39 @@ IntrpVisitSwitchStmt = function(intrp, stmt)
     intrp[4] = @preIsInSwitch
 end function
 // @throwable
+IntrpVisitTryStmt = function(intrp, stmt)
+    value = IntrpExecute(@intrp, @stmt[1])
+    if @value isa @Return or @value isa @Break or @value isa @Continue then return @value
+
+    if @value isa @RuntimeException then
+        if @stmt[3] != null then
+            if @stmt[2] != null then
+                if @value isa @Throw then
+                    EnvironmentDefine(@intrp[1], @stmt[2][1], @value.value)
+                else
+                    EnvironmentDefine(@intrp[1], @stmt[2][1], @value.message)
+                end if
+            end if
+
+            for statement in @stmt[3][1]
+                throw = IntrpExecute(@intrp, @statement)
+                if @throw isa @RuntimeException then return @throw
+            end for
+        end if
+    end if
+
+    if @stmt[4] != null then
+        throw = IntrpExecute(@intrp, @stmt[4])
+        if @throw isa @RuntimeException then return @throw
+    end if
+end function
+// @throwable
+IntrpVisitThrowStmt = function(intrp, stmt)
+    value = IntrpEvaluate(@intrp, @stmt[1])
+    if @value isa @RuntimeException then return @value
+    return NewThrow(@value)
+end function
+// @throwable
 IntrpVisitPrintStmt = function(intrp, stmt)
     value = IntrpEvaluate(@intrp, @stmt[1])
     if @value isa @RuntimeException then return @value
@@ -2868,6 +3041,12 @@ NewReturn = function(value)
     ret.value = @value
     return @ret
 end function
+Throw = new RuntimeException
+NewThrow = function(value)
+    ret = new @Throw
+    ret.value = @value
+    return @ret
+end function
 LoxRuntimeError = function(error)
     print("[line " + @error.token[3] + "] " + @error.message)
     globals.hadRuntimeError = true
@@ -3016,6 +3195,13 @@ IntrpUnitTests = function
         "  default: print ""x is not 0 or 1"";",
         "}",
     ]
-    runSource(swich.join(char(10)))
+    try = [
+        "try {",
+        "  throw ""error"";",
+        "} catch (var e) {",
+        "  print e;",
+        "}",
+    ]
+    runSource(try.join(char(10)))
 end function
 IntrpUnitTests

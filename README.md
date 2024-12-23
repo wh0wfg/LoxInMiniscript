@@ -18,6 +18,25 @@ original: **0.971s**
 
 tail call optimized: **0.521s**
 
+### try-catch
+```C#
+try {
+  throw "error"; // you can throw any thing
+} catch (var e) {
+  print e;
+}
+
+try {
+    a=a+1;
+} catch (var e) {
+    print e;
+    print "catch it!";
+} finally {
+    var a="this is finally";
+    print a;
+}
+```
+
 ### switch-case
 ```C#
 var x = 1;
