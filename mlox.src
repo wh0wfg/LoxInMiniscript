@@ -574,8 +574,8 @@ ParserSwitchStatement = function(parser)
     throw = ParserConsume(@parser, @TokenType.LEFT_PAREN, "Expect '(' after 'switch'.")
     if @throw isa @RuntimeException then return @throw
 
-    value = ParserExpression(@parser)
-    if @value isa @RuntimeException then return @value
+    swictchValue = ParserExpression(@parser)
+    if @swictchValue isa @RuntimeException then return @swictchValue
 
     throw = ParserConsume(@parser, @TokenType.RIGHT_PAREN, "Expect ')' after switch value.")
     if @throw isa @RuntimeException then return @throw
@@ -583,8 +583,10 @@ ParserSwitchStatement = function(parser)
     throw = ParserConsume(@parser, @TokenType.LEFT_BRACE, "Expect '{' before switch cases.")
     if @throw isa @RuntimeException then return @throw
 
-    cases = []
-    while not ParserCheck(@parser, @TokenType.RIGHT_BRACE) and not ParserIsAtEnd(@parser)
+    conditions = []
+    bodies = []
+    default = null
+    while not ParserCheck(@parser, @TokenType.RIGHT_BRACE)
         if ParserMatch(@parser, [@TokenType.CASE]) then
             value = ParserExpression(@parser)
             if @value isa @RuntimeException then return @value
@@ -593,21 +595,34 @@ ParserSwitchStatement = function(parser)
             if @throw isa @RuntimeException then return @throw
 
             statements = []
-            while not ParserCheck(@parser, [@TokenType.CASE, @TokenType.DEFAULT, @TokenType.RIGHT_BRACE]) and not ParserIsAtEnd(@parser)
-                statements.push(ParserDeclaration(@parser))
+            while not ParserCheck(@parser, @TokenType.CASE) and not ParserCheck(@parser, @TokenType.DEFAULT) and not ParserCheck(@parser, @TokenType.RIGHT_BRACE)
+                throw = ParserDeclaration(@parser)
+                if @throw isa @RuntimeException then return @throw
+                statements.push(@throw)
             end while
 
-            cases.push(NewSwitchCaseStmt(@value, @statements))
+            conditions.push(@value)
+            bodies.push(@statements)
         else if ParserMatch(@parser, [@TokenType.DEFAULT]) then
+            if @default != null then
+                ParserError(ParserPeek(@parser), "Cannot have multiple default cases in one switch statement.")
+            end if
+
             throw = ParserConsume(@parser, @TokenType.COLON, "Expect ':' after 'default'.")
             if @throw isa @RuntimeException then return @throw
 
             statements = []
-            while not ParserCheck(@parser, [@TokenType.CASE, @TokenType.DEFAULT, @TokenType.RIGHT_BRACE]) and not ParserIsAtEnd(@parser)
-                statements.push(ParserDeclaration(@parser))
+            while not ParserCheck(@parser, @TokenType.RIGHT_BRACE)
+                throw = ParserDeclaration(@parser)
+                if @throw isa @RuntimeException then return @throw
+                statements.push(@throw)
             end while
 
-            cases.push(NewSwitchCaseStmt(null, @statements))
+            if not ParserCheck(@parser, @TokenType.RIGHT_BRACE) then
+                ParserError(ParserPeek(@parser), "Expect '}' after default case.")
+            end if
+            
+            default = @statements
         else
             ParserError(ParserPeek(@parser), "Expect 'case' or 'default' in switch statement.")
         end if
@@ -616,7 +631,7 @@ ParserSwitchStatement = function(parser)
     throw = ParserConsume(@parser, @TokenType.RIGHT_BRACE, "Expect '}' after switch cases.")
     if @throw isa @RuntimeException then return @throw
 
-    return NewSwitchStmt(@value, @cases)
+    return NewSwitchStmt(@swictchValue, @conditions, @bodies, @default)
 end function
 // @throwable
 ParserIfStatement = function(parser)
@@ -1176,6 +1191,7 @@ StmtAccept = function(stmt, visitor)
     if @stmt[0] == "Expression" then return VisitorVisitExpressionStmt(@visitor, @stmt)
     if @stmt[0] == "Function" then return VisitorVisitFunctionStmt(@visitor, @stmt)
     if @stmt[0] == "If" then return VisitorVisitIfStmt(@visitor, @stmt)
+    if @stmt[0] == "Switch" then return VisitorVisitSwitchStmt(@visitor, @stmt)
     if @stmt[0] == "Print" then return VisitorVisitPrintStmt(@visitor, @stmt)
     if @stmt[0] == "Return" then return VisitorVisitReturnStmt(@visitor, @stmt)
     if @stmt[0] == "Break" then return VisitorVisitBreakStmt(@visitor, @stmt)
@@ -1209,17 +1225,13 @@ end function
 NewFunctionStmt = function(_name, _params, body)
     return ["Function", @_name, @_params, @body, rnd]
 end function
-// case
-// @value       stmt[1] Expr
-// @statements  stmt[2] Stmt[]
-NewSwitchCaseStmt = function(value, statements)
-    return ["SwitchCase", @value, @statements, rnd]
-end function
 // switch
 // @value       stmt[1] Expr
-// @cases       stmt[2] Stmt[]
-NewSwitchStmt = function(value, cases)
-    return ["Switch", @value, @cases, rnd]
+// @conditions  stmt[2] Expr[]
+// @bodies      stmt[3] Stmt[][]
+// @default     stmt[4] Stmt[]
+NewSwitchStmt = function(value, conditions, bodies, default)
+    return ["Switch", @value, @conditions, @bodies, @default, rnd]
 end function
 // if
 // @condition   stmt[1] Expr
@@ -1317,6 +1329,14 @@ VisitorVisitIfStmt = function(visitor, stmt)
     end if
 end function
 // @throwable
+VisitorVisitSwitchStmt = function(visitor, stmt)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitSwitchStmt(@visitor, @stmt)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitSwitchStmt(@visitor, @stmt)
+    end if
+end function
+// @throwable
 VisitorVisitPrintStmt = function(visitor, stmt)
     if @visitor[-1] == "Interpreter" then
         return IntrpVisitPrintStmt(@visitor, @stmt)
@@ -1333,8 +1353,8 @@ IntrpVisitContinueStmt = function(intrp, stmt)
 end function
 // @throwable
 IntrpVisitBreakStmt = function(intrp, stmt)
-    if not @intrp[3] then
-        return NewRuntimeError(@stmt[1], "Cannot break outside of a loop.")
+    if not @intrp[3] and not @intrp[4] then
+        return NewRuntimeError(@stmt[1], "Cannot break outside of a loop or switch.")
     end if
     return NewBreak()
 end function
@@ -1554,9 +1574,8 @@ ClassType = {
 // @scopes          resolver[1]     string[]
 // @currentFunction resolver[2]     FunctionType
 // @currentClass    resolver[3]     ClassType
-// @isInLoop        resolver[4]     boolean
 NewResolver = function(interpreter)
-    return [interpreter, [], @FunctionType.NONE, @ClassType.NONE, false, "Resolver"]
+    return [interpreter, [], @FunctionType.NONE, @ClassType.NONE, "Resolver"]
 end function
 // @throwable
 ResolverResolve = function(resolver, statements)
@@ -1637,6 +1656,36 @@ ResolverVisitIfStmt = function(resolver, stmt)
     end if
 end function
 // @throwable
+ResolverVisitSwitchStmt = function(resolver, stmt)
+    throw = ResolverResolveExpr(@resolver, @stmt[1])
+    if @throw isa @RuntimeException then return @throw
+
+    for i in range(0, stmt[2].len-1, 1)
+        throw = ResolverResolveExpr(@resolver, @stmt[2][i])
+        if @throw isa @RuntimeException then return @throw
+
+        ResolverBeginScope(@resolver)
+
+        for statement in @stmt[3][i]
+            throw = ResolverResolveStmt(@resolver, @statement)
+            if @throw isa @RuntimeException then return @throw
+        end for
+        
+        ResolverEndScope(@resolver)
+    end for
+    
+    if @stmt[4] != null then
+        ResolverBeginScope(@resolver)
+
+        for statement in @stmt[4]
+            throw = ResolverResolveStmt(@resolver, @statement)
+            if @throw isa @RuntimeException then return @throw
+        end for
+
+        ResolverEndScope(@resolver)
+    end if
+end function
+// @throwable
 ResolverVisitPrintStmt = function(resolver, stmt)
     throw = ResolverResolveExpr(@resolver, @stmt[1])
     if @throw isa @RuntimeException then return @throw
@@ -1657,15 +1706,11 @@ ResolverVisitReturnStmt = function(resolver, stmt)
 end function
 // @throwable
 ResolverVisitBreakStmt = function(resolver, stmt)
-    if not @resolver[4] then
-        LoxErrorTM(@stmt[1], "Cannot break outside of a loop.")
-    end if
+    // do nothing
 end function
 // @throwable
 ResolverVisitContinueStmt = function(resolver, stmt)
-    if not @resolver[4] then
-        LoxErrorTM(@stmt[1], "Cannot continue outside of a loop.")
-    end if
+    // do nothing
 end function
 // @throwable
 ResolverVisitVarStmt = function(resolver, stmt)
@@ -1689,11 +1734,9 @@ ResolverVisitForeachStmt = function(resolver, stmt)
 end function
 // @throwable
 ResolverVisitDoWhileStmt = function(resolver, stmt)
-    resolver[4] = true
     throw = ResolverResolveStmt(@resolver, @stmt[2])
     if @throw isa @RuntimeException then return @throw
-    resolver[4] = false
-    
+
     throw = ResolverResolveExpr(@resolver, @stmt[1])
     if @throw isa @RuntimeException then return @throw
 end function
@@ -1702,10 +1745,8 @@ ResolverVisitWhileStmt = function(resolver, stmt)
     throw = ResolverResolveExpr(@resolver, @stmt[1])
     if @throw isa @RuntimeException then return @throw
     
-    resolver[4] = true
     throw = ResolverResolveStmt(@resolver, @stmt[2])
     if @throw isa @RuntimeException then return @throw
-    resolver[4] = false
 end function
 // expr
 // @throwable
@@ -1979,6 +2020,10 @@ end function
 LoxCallableCall = function(callable, intrp, arguments)
     preIsInLoop = @intrp[3]
     intrp[3] = false
+
+    preIsInSwitch = @intrp[4]
+    intrp[4] = false
+
     if @callable[0] == "LoxFunction" then
         environment = NewEnvironment(@callable[2])
         for i in range(0, callable[1][2].len - 1, 1)
@@ -1988,6 +2033,7 @@ LoxCallableCall = function(callable, intrp, arguments)
         throw = IntrpExecuteBlock(@intrp, @callable[1][3], @environment)
 
         intrp[3] = @preIsInLoop
+        intrp[4] = @preIsInSwitch
 
         if @throw isa @Return then
             if @callable[3] then return EnvironmentGetAt(@callable[2], 0, "this")
@@ -2006,15 +2052,18 @@ LoxCallableCall = function(callable, intrp, arguments)
             throw = LoxCallableCall(@bind, @intrp, @arguments)
             if @throw isa @RuntimeException then 
                 intrp[3] = @preIsInLoop
+                intrp[4] = @preIsInSwitch
                 return @throw
             end if
         end if
         intrp[3] = @preIsInLoop
+        intrp[4] = @preIsInSwitch
         return @instance
     end if
     if Intrinsics.hasIndex(@callable[0]) then
         intrinsicFn = @Intrinsics[@callable[0]][2]
         intrp[3] = @preIsInLoop
+        intrp[4] = @preIsInSwitch
         return intrinsicFn(@intrp, @arguments)
     end if
 end function
@@ -2137,6 +2186,7 @@ AddIntrinsic("clock", 0, @clockIntrinsic)
 // @environment intrp[1] Environment
 // @locals      intrp[2] string: {}
 // @isInLoop    intrp[3] boolean
+// @isInSwitch  intrp[4] boolean
 NewInterpreter = function
     _globals = NewEnvironment()
     environment =  @_globals
@@ -2145,7 +2195,7 @@ NewInterpreter = function
         EnvironmentDefine(@_globals, @intrinsicName, @Intrinsics[@intrinsicName])
     end for
     // EnvironmentDefine(@_globals, "clock", @ClockFn)
-    return [_globals, @environment, @_locals, false, false, false, "Interpreter"]
+    return [_globals, @environment, @_locals, false, false, "Interpreter"]
 end function
 // @catchable
 Interpret = function(intrp, statements)
@@ -2243,6 +2293,48 @@ IntrpVisitIfStmt = function(intrp, stmt)
     end if
 end function
 // @throwable
+IntrpVisitSwitchStmt = function(intrp, stmt)
+    value = IntrpEvaluate(@intrp, @stmt[1])
+    if @value isa @RuntimeException then return @value
+    
+    matched = false
+    isBreak = false
+
+    preIsInSwitch = @intrp[4]
+    intrp[4] = true
+    for i in range(0, stmt[2].len-1, 1)
+        if not @matched then
+            condition = IntrpEvaluate(@intrp, @stmt[2][i])
+            if @condition isa @RuntimeException then return @condition
+        end if 
+        if matched or @condition == @value then
+            matched = true
+            for statement in @stmt[3][i]
+                throw = IntrpExecute(@intrp, @statement)
+                if @throw isa @Break then 
+                    isBreak = true
+                    break
+                end if
+                if @throw isa @RuntimeException then return @throw
+            end for
+        end if
+        if @isBreak then break
+    end for
+
+    if @stmt[4] != null and not @isBreak then
+        for statement in @stmt[4]
+            throw = IntrpExecute(@intrp, @statement)
+            if @throw isa @Break then
+                isBreak = true
+                break
+            end if
+            if @throw isa @RuntimeException then return @throw
+        end for
+    end if
+
+    intrp[4] = @preIsInSwitch
+end function
+// @throwable
 IntrpVisitPrintStmt = function(intrp, stmt)
     value = IntrpEvaluate(@intrp, @stmt[1])
     if @value isa @RuntimeException then return @value
@@ -2323,31 +2415,47 @@ IntrpVisitForeachStmt = function(intrp, stmt)
     iterable = IntrpEvaluate(@intrp, @stmt[2])
     if @iterable isa @RuntimeException then return @iterable
 
+    preIsInLoop = @intrp[3]
+    intrp[3] = true
+
     if @iterable isa string then
         for value in @iterable
             EnvironmentDefine(@intrp[1], @stmt[1][1], @value)
             throw = IntrpExecute(@intrp, @stmt[3])
+            if @throw isa @Break then break
+            if @throw isa @Continue then continue
             if @throw isa @RuntimeException then return @throw
         end for
+
+        intrp[3] = @preIsInLoop
     else if @iterable[0] == "LoxList" then
         for value in @iterable[1]
             EnvironmentDefine(@intrp[1], @stmt[1][1], @value)
             throw = IntrpExecute(@intrp, @stmt[3])
+            if @throw isa @Break then break
+            if @throw isa @Continue then continue
             if @throw isa @RuntimeException then return @throw
         end for
+
+        intrp[3] = @preIsInLoop
     else if @iterable[0] == "LoxMap" then
         for key in iterable[1].indexes
             // for key:value pair
             EnvironmentDefine(@intrp[1], @stmt[1][1], NewMapExpr({"key": @key, "value": @iterable[1][@key]}))
             throw = IntrpExecute(@intrp, @stmt[3])
+            if @throw isa @Break then break
+            if @throw isa @Continue then continue
             if @throw isa @RuntimeException then return @throw
         end for
+
+        intrp[3] = @preIsInLoop
     else
         return NewRuntimeError(@stmt[2][1], "Unsupported iterable type " + @iterable[0] + ".")
     end if
 end function
 // @throwable
 IntrpVisitDoWhileStmt = function(intrp, stmt)
+    preIsInLoop = @intrp[3]
     intrp[3] = true
     throw = IntrpExecute(@intrp, @stmt[2])
     while IntrpIsTruthy(IntrpEvaluate(@intrp, @stmt[1]))
@@ -2356,10 +2464,11 @@ IntrpVisitDoWhileStmt = function(intrp, stmt)
         if @throw isa @Continue then continue
         if @throw isa @RuntimeException then return @throw
     end while
-    intrp[3] = false
+    intrp[3] = @preIsInLoop
 end function
 // @throwable
 IntrpVisitWhileStmt = function(intrp, stmt)
+    preIsInLoop = @intrp[3]
     intrp[3] = true
     while IntrpIsTruthy(IntrpEvaluate(@intrp, @stmt[1]))
         throw = IntrpExecute(@intrp, @stmt[2])
@@ -2367,7 +2476,7 @@ IntrpVisitWhileStmt = function(intrp, stmt)
         if @throw isa @Continue then continue
         if @throw isa @RuntimeException then return @throw
     end while
-    intrp[3] = false
+    intrp[3] = @preIsInLoop
 end function
 // @throwable
 IntrpVisitAssignExpr = function(intrp, expr)
@@ -2899,6 +3008,14 @@ IntrpUnitTests = function
         "}];",
         "print f[0](1);",
     ]
-    runSource(breakContinue.join(char(10)))
+    swich = [
+        "var x = 3;",
+        "switch (x) {",
+        "  case 0: print ""x is 0"";",
+        "  case 1: print ""x is 1"";",
+        "  default: print ""x is not 0 or 1"";",
+        "}",
+    ]
+    runSource(swich.join(char(10)))
 end function
 IntrpUnitTests

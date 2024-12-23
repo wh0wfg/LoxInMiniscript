@@ -18,6 +18,16 @@ original: **0.971s**
 
 tail call optimized: **0.521s**
 
+### switch-case
+```C#
+var x = 1;
+switch (x) {
+    case 0: print ""x is 0"";
+    case 1: print ""x is 1"";break;
+    default: print ""x is not 0 or 1"";
+}
+```
+
 ### lambda
 ```C#
 var f = [lambda (x) {
