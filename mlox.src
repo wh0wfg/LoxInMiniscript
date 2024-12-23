@@ -10,6 +10,14 @@ TokenType = {
 "DOT": "DOT",
 "MINUS": "MINUS",
 "PLUS": "PLUS",
+"MOD": "MOD",
+"INCREMENT": "INCREMENT",
+"DECREMENT": "DECREMENT",
+"PLUS_ASSIGN": "PLUS_ASSIGN",
+"MINUS_ASSIGN": "MINUS_ASSIGN",
+"MUL_ASSIGN": "MUL_ASSIGN",
+"DIV_ASSIGN": "DIV_ASSIGN",
+"MOD_ASSIGN": "MOD_ASSIGN",
 "COLON": "COLON",
 "SEMICOLON": "SEMICOLON",
 "SLASH": "SLASH",
@@ -212,21 +220,43 @@ ScanToken = function(scanner)
     else if @c == "." then
         AddToken(@scanner, @TokenType.DOT)
     else if @c == "-" then
-        AddToken(@scanner, @TokenType.MINUS)
+        if ScannerMatch(@scanner, "-") then
+            AddToken(@scanner, @TokenType.DECREMENT)
+        else if ScannerMatch(@scanner, "=") then
+            AddToken(@scanner, @TokenType.MINUS_ASSIGN)
+        else
+            AddToken(@scanner, @TokenType.MINUS)
+        end if
     else if @c == "+" then
-        AddToken(@scanner, @TokenType.PLUS)
+        if ScannerMatch(@scanner, "+") then
+            AddToken(@scanner, @TokenType.INCREMENT)
+        else if ScannerMatch(@scanner, "=") then
+            AddToken(@scanner, @TokenType.PLUS_ASSIGN)
+        else
+            AddToken(@scanner, @TokenType.PLUS)
+        end if
     else if @c == ":" then
         AddToken(@scanner, @TokenType.COLON)
     else if @c == ";" then
         AddToken(@scanner, @TokenType.SEMICOLON)
+    else if @c == "%" then
+        if ScannerMatch(@scanner, "=") then
+            AddToken(@scanner, @TokenType.MOD_ASSIGN)
+        else
+            AddToken(@scanner, @TokenType.MOD)
+        end if
     else if @c == "*" then
-        AddToken(@scanner, @TokenType.STAR)
+        if ScannerMatch(@scanner, "=") then
+            AddToken(@scanner, @TokenType.MUL_ASSIGN)
+        else
+            AddToken(@scanner, @TokenType.STAR)
+        end if
     else if @c == "!" then
-    if ScannerMatch(@scanner, "=") then
-        AddToken(@scanner, @TokenType.BANG_EQUAL)
-    else
-        AddToken(@scanner, @TokenType.BANG)
-    end if
+        if ScannerMatch(@scanner, "=") then
+            AddToken(@scanner, @TokenType.BANG_EQUAL)
+        else
+            AddToken(@scanner, @TokenType.BANG)
+        end if
     else if @c == "=" then
         if ScannerMatch(@scanner, "=") then
             AddToken(@scanner, @TokenType.EQUAL_EQUAL)
@@ -250,6 +280,8 @@ ScanToken = function(scanner)
             while ScannerPeek(@scanner) != char(10) and not ScannerIsAtEnd(@scanner)
                 ScannerAdvance(@scanner)
             end while
+        else if ScannerMatch(@scanner, "=") then
+            AddToken(@scanner, @TokenType.DIV_ASSIGN)
         else
             AddToken(@scanner, @TokenType.SLASH)
         end if
@@ -288,6 +320,8 @@ ExprAccept = function(expr, visitor)
     if case == "Super" then return VisitorVisitSuperExpr(@visitor, @expr)
     if case == "This" then return VisitorVisitThisExpr(@visitor, @expr)
     if case == "Unary" then return VisitorVisitUnaryExpr(@visitor, @expr)
+    if case == "Postfix" then return VisitorVisitPostfixExpr(@visitor, @expr)
+    if case == "Prefix" then return VisitorVisitPrefixExpr(@visitor, @expr)
     if case == "Variable" then return VisitorVisitVariableExpr(@visitor, @expr)
 end function
 // assign
@@ -379,6 +413,20 @@ end function
 // @right       expr[2] Expr
 NewUnaryExpr = function(operator, right)
     return ["Unary", @operator, @right, rnd]
+end function
+// postfix
+// @value       expr[1] Expr
+// @operator    expr[2] Token
+// @assignStmt  expr[3] Stmt
+NewPostfixExpr = function(value, operator, assignStmt)
+    return ["Postfix", @value, @operator, @assignStmt, rnd]
+end function
+// prefix
+// @value      expr[1] Expr
+// @operator   expr[2] Token
+// @assignStmt expr[3] Stmt
+NewPrefixExpr = function(value, operator, assignStmt)
+    return ["Prefix", @value, @operator, @assignStmt, rnd]
 end function
 // variable
 // @name        expr[1] Token
@@ -898,20 +946,56 @@ ParserAssignment = function(parser)
     expr = ParserOr(@parser)
     if @expr isa @RuntimeException then return @expr
 
-    if ParserMatch(@parser, [@TokenType.EQUAL]) then
+    if ParserMatch(@parser, [@TokenType.EQUAL, @TokenType.PLUS_ASSIGN, @TokenType.MINUS_ASSIGN, @TokenType.MUL_ASSIGN, @TokenType.DIV_ASSIGN, @TokenType.MOD_ASSIGN]) then
         equals = ParserPrevious(@parser)
         value = ParserAssignment(@parser)
         if @value isa @RuntimeException then return @value
 
         if @expr[0] == "Variable" then
             _name = @expr[1]
-            return NewAssignExpr(@_name, @value)
+            if @equals[0] == "EQUAL" then
+                return NewAssignExpr(@_name, @value)
+            else if @equals[0] == "PLUS_ASSIGN" then
+                return NewAssignExpr(@_name, NewBinaryExpr(@expr, NewToken(@TokenType.PLUS, "+", null, @equals[3]), @value))
+            else if @equals[0] == "MINUS_ASSIGN" then
+                return NewAssignExpr(@_name, NewBinaryExpr(@expr, NewToken(@TokenType.MINUS, "-", null, @equals[3]), @value))
+            else if @equals[0] == "MUL_ASSIGN" then
+                return NewAssignExpr(@_name, NewBinaryExpr(@expr, NewToken(@TokenType.STAR, "*", null, @equals[3]), @value))
+            else if @equals[0] == "DIV_ASSIGN" then
+                return NewAssignExpr(@_name, NewBinaryExpr(@expr, NewToken(@TokenType.SLASH, "/", null, @equals[3]), @value))
+            else if @equals[0] == "MOD_ASSIGN" then
+                return NewAssignExpr(@_name, NewBinaryExpr(@expr, NewToken(@TokenType.MOD, "%", null, @equals[3]), @value))
+            end if
         else if @expr[0] == "Get" then
             get = @expr
-            return NewSetExpr(@get[1], @get[2], @value)
+            if @equals[0] == "EQUAL" then
+                return NewSetExpr(@get[1], @get[2], @value)
+            else if @equals[0] == "PLUS_ASSIGN" then
+                return NewSetExpr(@get[1], @get[2], NewBinaryExpr(NewGetExpr(@get[1], @get[2]), NewToken(@TokenType.PLUS, "+", null, @equals[3]), @value))
+            else if @equals[0] == "MINUS_ASSIGN" then
+                return NewSetExpr(@get[1], @get[2], NewBinaryExpr(NewGetExpr(@get[1], @get[2]), NewToken(@TokenType.MINUS, "-", null, @equals[3]), @value))
+            else if @equals[0] == "MUL_ASSIGN" then
+                return NewSetExpr(@get[1], @get[2], NewBinaryExpr(NewGetExpr(@get[1], @get[2]), NewToken(@TokenType.STAR, "*", null, @equals[3]), @value))
+            else if @equals[0] == "DIV_ASSIGN" then
+                return NewSetExpr(@get[1], @get[2], NewBinaryExpr(NewGetExpr(@get[1], @get[2]), NewToken(@TokenType.SLASH, "/", null, @equals[3]), @value))
+            else if @equals[0] == "MOD_ASSIGN" then
+                return NewSetExpr(@get[1], @get[2], NewBinaryExpr(NewGetExpr(@get[1], @get[2]), NewToken(@TokenType.MOD, "%", null, @equals[3]), @value))
+            end if
         else if @expr[0] == "Subscript" then
             subscript = @expr
-            return NewSubscriptSetExpr(@subscript[1], @subscript[2], @value, @subscript[3])
+            if @equals[0] == "EQUAL" then
+                return NewSubscriptSetExpr(@subscript[1], @subscript[2], @value, @subscript[3])
+            else if @equals[0] == "PLUS_ASSIGN" then
+                return NewSubscriptSetExpr(@subscript[1], @subscript[2], NewBinaryExpr(NewSubscriptExpr(@subscript[1], @subscript[2], @subscript[3]), NewToken(@TokenType.PLUS, "+", null, @equals[3]), @value), @subscript[3])
+            else if @equals[0] == "MINUS_ASSIGN" then
+                return NewSubscriptSetExpr(@subscript[1], @subscript[2], NewBinaryExpr(NewSubscriptExpr(@subscript[1], @subscript[2], @subscript[3]), NewToken(@TokenType.MINUS, "-", null, @equals[3]), @value), @subscript[3])
+            else if @equals[0] == "MUL_ASSIGN" then
+                return NewSubscriptSetExpr(@subscript[1], @subscript[2], NewBinaryExpr(NewSubscriptExpr(@subscript[1], @subscript[2], @subscript[3]), NewToken(@TokenType.STAR, "*", null, @equals[3]), @value), @subscript[3])
+            else if @equals[0] == "DIV_ASSIGN" then
+                return NewSubscriptSetExpr(@subscript[1], @subscript[2], NewBinaryExpr(NewSubscriptExpr(@subscript[1], @subscript[2], @subscript[3]), NewToken(@TokenType.SLASH, "/", null, @equals[3]), @value), @subscript[3])
+            else if @equals[0] == "MOD_ASSIGN" then
+                return NewSubscriptSetExpr(@subscript[1], @subscript[2], NewBinaryExpr(NewSubscriptExpr(@subscript[1], @subscript[2], @subscript[3]), NewToken(@TokenType.MOD, "%", null, @equals[3]), @value), @subscript[3])
+            end if
         end if
 
         ParserError(@equals, "Invalid assignment target.")
@@ -995,7 +1079,7 @@ ParserFactor = function(parser)
     expr = ParserUnary(@parser)
     if @expr isa @RuntimeException then return @expr
 
-    while ParserMatch(@parser, [@TokenType.SLASH, @TokenType.STAR])
+    while ParserMatch(@parser, [@TokenType.SLASH, @TokenType.STAR, @TokenType.MOD])
         operator = ParserPrevious(@parser)
         right = ParserUnary(@parser)
         if @right isa @RuntimeException then return @right
@@ -1012,7 +1096,76 @@ ParserUnary = function(parser)
         if @right isa @RuntimeException then return @right
         return NewUnaryExpr(@operator, @right)
     end if
-    return ParserCall(@parser)
+    return ParserIncrement(@parser)
+end function
+// @throwable
+ParserIncrement = function(parser)
+    if ParserMatch(@parser, [@TokenType.INCREMENT, @TokenType.DECREMENT]) then
+        operator = ParserPrevious(@parser)
+        if @operator[0] == "INCREMENT" then
+            assignOp = NewToken(@TokenType.PLUS, "+", null, @operator[3])
+        else if @operator[0] == "DECREMENT" then
+            assignOp = NewToken(@TokenType.MINUS, "-", null, @operator[3])
+        end if
+
+        expr = ParserCall(@parser)
+        if @expr isa @RuntimeException then return @expr
+
+        if @expr[0] == "Variable" then
+            _name = @expr
+        
+            assign = NewAssignExpr(@_name[1], NewBinaryExpr(@expr, assignOp, NewLiteralExpr(1)))
+            return NewPrefixExpr(@_name, @operator, @assign)
+        end if
+        if @expr[0] == "Get" then
+            get = @expr
+            assign = NewSetExpr(@get[1], @get[2], NewBinaryExpr(NewGetExpr(@get[1], @get[2]), assignOp, NewLiteralExpr(1)))
+
+            return NewPrefixExpr(@get, @operator, @assign)
+        end if
+        if @expr[0] == "Subscript" then
+            subscript = @expr
+
+            assign = NewSubscriptSetExpr(@subscript[1], @subscript[2], NewBinaryExpr(NewSubscriptExpr(@subscript[1], @subscript[2], @subscript[3]), assignOp, NewLiteralExpr(1)), @subscript[3])
+
+            return NewPrefixExpr(@subscript, @operator, @assign)
+        end if
+
+        ParserError(@operator, "Invalid increment target.")
+    end if
+
+    expr = ParserCall(@parser)
+    if @expr isa @RuntimeException then return @expr
+
+    if ParserMatch(@parser, [@TokenType.INCREMENT, @TokenType.DECREMENT]) then
+        operator = ParserPrevious(@parser)
+        if @operator[0] == "INCREMENT" then
+            assignOp = NewToken(@TokenType.PLUS, "+", null, @operator[3])
+        else if @operator[0] == "DECREMENT" then
+            assignOp = NewToken(@TokenType.MINUS, "-", null, @operator[3])
+        end if
+
+        if @expr[0] == "Variable" then
+            _name = @expr
+            assign = NewAssignExpr(@_name[1], NewBinaryExpr(@expr, assignOp, NewLiteralExpr(1)))
+
+            return NewPostfixExpr(@_name, @operator, @assign)
+        end if
+        if @expr[0] == "Get" then
+            get = @expr
+            assign = NewSetExpr(@get[1], @get[2], NewBinaryExpr(NewGetExpr(@get[1], @get[2]), assignOp, NewLiteralExpr(1)))
+
+            return NewPostfixExpr(@get, @operator, @assign)
+        end if
+        if @expr[0] == "Subscript" then
+            subscript = @expr
+            assign = NewSubscriptSetExpr(@subscript[1], @subscript[2], NewBinaryExpr(NewSubscriptExpr(@subscript[1], @subscript[2], @subscript[3]), assignOp, NewLiteralExpr(1)), @subscript[3])
+
+            return NewPostfixExpr(@subscript, @operator, @assign)
+        end if
+    end if
+
+    return @expr
 end function
 // @throwable
 ParserFinishCall = function(parser, callee)
@@ -1091,7 +1244,6 @@ ParserCall = function(parser)
             break
         end if
     end while
-
     return @expr
 end function
 // @throwable
@@ -1661,6 +1813,22 @@ VisitorVisitUnaryExpr = function(visitor, expr)
     end if
 end function
 // @throwable
+VisitorVisitPrefixExpr = function(visitor, expr)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitPrefixExpr(@visitor, @expr)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitPrefixExpr(@visitor, @expr)
+    end if
+end function
+// @throwable
+VisitorVisitPostfixExpr = function(visitor, expr)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitPostfixExpr(@visitor, @expr)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitPostfixExpr(@visitor, @expr)
+    end if
+end function
+// @throwable
 VisitorVisitVariableExpr = function(visitor, expr)
     if @visitor[-1] == "Interpreter" then
         return IntrpVisitVariableExpr(@visitor, @expr)
@@ -2005,6 +2173,22 @@ end function
 // @throwable
 ResolverVisitUnaryExpr = function(resolver, expr)
     throw = ResolverResolveExpr(@resolver, @expr[2])
+    if @throw isa @RuntimeException then return @throw
+end function
+// @throwable
+ResolverVisitPrefixExpr = function(resolver, expr)
+    throw = ResolverResolveExpr(@resolver, @expr[1])
+    if @throw isa @RuntimeException then return @throw
+
+    throw = ResolverResolveStmt(@resolver, @expr[3])
+    if @throw isa @RuntimeException then return @throw
+end function
+// @throwable
+ResolverVisitPostfixExpr = function(resolver, expr)
+    throw = ResolverResolveExpr(@resolver, @expr[1])
+    if @throw isa @RuntimeException then return @throw
+
+    throw = ResolverResolveStmt(@resolver, @expr[3])
     if @throw isa @RuntimeException then return @throw
 end function
 ResolverVisitVariableExpr = function(resolver, expr)
@@ -2723,7 +2907,12 @@ IntrpVisitBinaryExpr = function(intrp, expr)
         if @left[0] == "LoxList" and @right isa number then return NewLoxList(@left[1] * @right)
         return NewRuntimeError(@expr[2], "Unsupported operand types" + @left[0] + " and " + @right[0] + ".")
     end if
-
+    if case == @TokenType.MOD then
+        throw = IntrpCheckNumberOperands(@expr[2], @left, @right)
+        if @throw isa @RuntimeException then return @throw
+        if @right == 0 then return NewRuntimeError(@expr[2], "Division by zero.")
+        return @left % @right
+    end if
     return null
 end function
 // @throwable
@@ -2954,6 +3143,23 @@ IntrpVisitUnaryExpr = function(intrp, expr)
         return -@right
     end if
 end function
+// @throwable
+IntrpVisitPrefixExpr = function(intrp, expr)
+    throw = IntrpEvaluate(@intrp, @expr[3])
+    if @throw isa @RuntimeException then return @throw
+
+    return IntrpEvaluate(@intrp, @expr[1])
+end function
+// @throwable
+IntrpVisitPostfixExpr = function(intrp, expr)
+    value = IntrpEvaluate(@intrp, @expr[1])
+    if @value isa @RuntimeException then return @value
+
+    throw = IntrpEvaluate(@intrp, @expr[3])
+    if @throw isa @RuntimeException then return @throw
+    return @value
+end function
+// @throwable
 IntrpVisitVariableExpr = function(intrp, expr)
     return IntrpLookupVariable(@intrp, @expr[1], @expr)
 end function
@@ -3215,6 +3421,14 @@ IntrpUnitTests = function
         "var b = {""a"": 2, ""c"": 3, ""d"": 4};",
         "print a + b;",
     ]
-    runSource(mapOprations.join(char(10)))
+    augOprations = [
+        "var a = 1;",
+        "print a++;",
+        "print ++a;",
+        "a -= 1;",
+        "print a;",
+        "print a % 2;",
+    ]
+    runSource(augOprations.join(char(10)))
 end function
 IntrpUnitTests

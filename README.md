@@ -1,6 +1,18 @@
 # Mlox Extended
 
 ## Extended Features
+
+### operation
+```c#
+var a=1;
+print a++; // 1
+// --a, a--
+print ++a; // 3
+a -= 1; // +=, *=, /=, %=
+print a; // 2
+print a%2; // 0
+```
+
 ### tail call optimization
 ```js
 tailCall = [
