@@ -196,7 +196,7 @@ Here are possible types of each arugment:
 
 RuntimeException and Throw types are only availalbe in catch block, others it will be automatically handled.
 
-All technical types are subclasses of RuntimeException, besides RuntimeException itself.
+All technical types are subclass of RuntimeException, besides RuntimeException itself.
 
 | Technical Type    | Type in Miniscript        |
 | -----------       | -------                   |
