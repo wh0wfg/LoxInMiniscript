@@ -111,6 +111,14 @@ foreach (var i in l) {
 ```js
 var l = [1,2,3,4];
 ```
+
+### list operation
+```c#
+var l = [1, 2];
+print l * 2; // [1, 2, 1, 2]
+print l + [3, 4]; // [1, 2, 3, 4]
+```
+
 ### map expression
 ```js
 var m = {1:1, "key":"value", l:"object"};

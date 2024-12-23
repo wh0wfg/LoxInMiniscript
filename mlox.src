@@ -2707,7 +2707,8 @@ IntrpVisitBinaryExpr = function(intrp, expr)
     if case == @TokenType.PLUS then
         if @left isa number and @right isa number then return @left + @right
         if @left isa string and @right isa string then return @left + @right
-        return NewRuntimeError(@expr[2], "Operands must be two numbers or two strings.")
+        if @left[0] == "LoxList" and @right[0] == "LoxList" then return NewLoxList(@left[1] + @right[1], @left[2])
+        return NewRuntimeError(@expr[2], "Unsupported operand types" + @left[0] + " and " + @right[0] + ".")
     end if
     if case == @TokenType.SLASH then
         throw = IntrpCheckNumberOperands(@expr[2], @left, @right)
@@ -2716,9 +2717,10 @@ IntrpVisitBinaryExpr = function(intrp, expr)
         return @left / @right
     end if
     if case == @TokenType.STAR then
-        throw = IntrpCheckNumberOperands(@expr[2], @left, @right)
-        if @throw isa @RuntimeException then return @throw
-        return @left * @right
+        if @left isa number and @right isa number then return @left * @right
+        if @left isa string and @right isa number then return @left * @right
+        if @left[0] == "LoxList" and @right isa number then return NewLoxList(@left[1] * @right, @left[2])
+        return NewRuntimeError(@expr[2], "Unsupported operand types" + @left[0] + " and " + @right[0] + ".")
     end if
 
     return null
@@ -3202,6 +3204,11 @@ IntrpUnitTests = function
         "  print e;",
         "}",
     ]
-    runSource(try.join(char(10)))
+    listOprations = [
+        "var l = [1, 2];",
+        "print l*2;",
+        "print l+[3, 4]",
+    ]
+    runSource(listOprations.join(char(10)))
 end function
 IntrpUnitTests
