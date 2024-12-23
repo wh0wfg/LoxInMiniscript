@@ -22,9 +22,13 @@ tail call optimized: **0.521s**
 ```C#
 var x = 1;
 switch (x) {
-    case 0: print ""x is 0"";
-    case 1: print ""x is 1"";break;
-    default: print ""x is not 0 or 1"";
+    case 0: 
+        print "x is 0";
+    case 1: 
+        print "x is 1";
+        break;
+    default: 
+        print "x is not 0 or 1";
 }
 ```
 
