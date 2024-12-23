@@ -2360,7 +2360,7 @@ EnvironmentTostring = function(env)
 end function
 // lox callable
 IsLoxCallable = function(callable)
-    return @callable isa funcRef or @callable[0] == "LoxFunction" or @callable[0] == "LoxClass" or Intrinsics.hasIndex(@callable[0]) or @callable[0] == "StrIntr"
+    return @callable isa funcRef or @callable[0] == "LoxFunction" or @callable[0] == "LoxClass" or Intrinsics.hasIndex(@callable[0]) or @callable[0] == "StrIntr" or @callable[0] == "ListIntr" or @callable[0] == "MapIntr"
 end function
 LoxCallableToString = function(callable)
     if @callable[0] == "LoxFunction" then
@@ -2383,6 +2383,12 @@ LoxCallableArity = function(callable)
         return LoxCallableArity(@initializer)
     end if
     if @callable[0] == "StrIntr" then
+        return @callable[1]
+    end if
+    if @callable[0] == "ListIntr" then
+        return @callable[1]
+    end if
+    if @callable[0] == "MapIntr" then
         return @callable[1]
     end if
     if  Intrinsics.hasIndex(@callable[0]) then
@@ -2545,7 +2551,7 @@ LoxMapGet = function(_map, key, _name)
 end function
 // intrinsics
 StrIntrs = {}
-// NOTE: _str will be dynamically pushed to the end of list
+// NOTE: _str will be dynamically pushed to the end of list (the same for list and map)
 AddStrIntrs = function(_name, arity, callable, isProperty=null)
     if @isProperty == null then isProperty = false
     StrIntrs[@_name] = ["StrIntr", @arity, @callable, @isProperty]
@@ -2589,6 +2595,54 @@ strJoin = function(_str, intrp, arguments)
     return @arguments[0][1].join(@_str)
 end function
 AddStrIntrs("Join", 1, @strJoin)
+ListIntrs = {}
+// See AddStrIntrs
+AddListIntrs = function(_name, arity, callable, isProperty=null)
+    if @isProperty == null then isProperty = false
+    ListIntrs[@_name] = ["ListIntr", @arity, @callable, @isProperty]
+end function
+listAdd = function(_list, intrp, arguments)
+    _list[1].push(@arguments[0])
+end function
+AddListIntrs("Add", 1, @listAdd)
+listRemove = function(_list, intrp, arguments)
+    _list[1].remove(@arguments[0])
+end function
+AddListIntrs("Remove", 1, @listRemove)
+listContains = function(_list, intrp, arguments)
+    return _list[1].hasIndex(@arguments[0])
+end function
+AddListIntrs("Contains", 1, @listContains)
+listSort = function(_list, intrp, arguments)
+    _list[1].sort()
+end function
+AddListIntrs("Sort", 0, @listSort)
+listCount = function(_list, intrp, arguments)
+    return _list[1].len
+end function
+AddListIntrs("Count", null, @listCount, true)
+// see AddStrIntrs
+MapIntrs = {}
+AddMapIntrs = function(_name, arity, callable, isProperty=null)
+    if @isProperty == null then isProperty = false
+    MapIntrs[@_name] = ["MapIntr", @arity, @callable, @isProperty]
+end function
+mapAdd = function(_map, intrp, arguments)
+    _map[1][@arguments[0]] = @arguments[1]
+end function
+AddMapIntrs("Add", 2, @mapAdd)
+mapRemove = function(_map, intrp, arguments)
+    _map[1].remove(@arguments[0])
+end function
+AddMapIntrs("Remove", 1, @mapRemove)
+mapContainsKey = function(_map, intrp, arguments)
+    return _map[1].hasIndex(@arguments[0])
+end function
+AddMapIntrs("ContainsKey", 1, @mapContainsKey)
+mapCount = function(_map, intrp, arguments)
+    return _map[1].len
+end function
+AddMapIntrs("Count", null, @mapCount, true)
 // { "xxx": ["xxx", arity, @callable] }
 // @arity    intrinsics[1] number
 // @callable intrinsics[2] callable
@@ -3069,8 +3123,34 @@ IntrpVisitGetExpr = function(intrp, expr)
         return LoxInstanceGet(@object, @expr[2])
         // return @object[1][@expr[3][1]]
     end if
+    if @object[0] == "LoxList" then
+        if ListIntrs.hasIndex(@expr[2][1]) then
+            listIntr = @ListIntrs[@expr[2][1]]
+            if @listIntr[3] then 
+                ret = @listIntr[2]
+                return ret(@object, @intrp, null)
+            else
+                listIntr.push(@object)
+                return @listIntr
+            end if
+        end if
+        return NewRuntimeError(@expr[2], "List has no property '" + @expr[2][1] + "'.")
+    end if
+    if @object[0] == "LoxMap" then
+        if MapIntrs.hasIndex(@expr[2][1]) then
+            mapIntr = @MapIntrs[@expr[2][1]]
+            if @mapIntr[3] then 
+                ret = @mapIntr[2]
+                return ret(@object, @intrp, null)
+            else
+                mapIntr.push(@object)
+                return @mapIntr
+            end if
+        end if
+        return NewRuntimeError(@expr[2], "Map has no property '" + @expr[2][1] + "'.")
+    end if
 
-    return NewRuntimeError(@expr[3], "Only instances have properties.")
+    return NewRuntimeError(@expr[3], "Get not supported on " + @object[0] + ".")
 end function
 // @throwable
 IntrpVisitSubscriptExpr = function(intrp, expr)
