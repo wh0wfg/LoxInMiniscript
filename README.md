@@ -123,6 +123,14 @@ print l + [3, 4]; // [1, 2, 3, 4]
 ```js
 var m = {1:1, "key":"value", l:"object"};
 ```
+
+### map operation
+```c#
+var a = {"a": 1, "b": 2};
+var b = {"a": 2, "c": 3, "d": 4};
+print a + b; // {"a": 2, "b": 2, "c": 3, "d": 4}
+```
+
 ### subscript
 ```js
 l = l[1];
