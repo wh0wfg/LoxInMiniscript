@@ -131,30 +131,59 @@ foreach (var i in l) {
     print -1;
 }
 ```
+**NOTE:** The following functions are not been tested and may contain errors or unexpected behaviors.
 
-### list expression
+### string intrinsics
+| Function                   | Description                                  |
+|----------------------------|----------------------------------------------|
+| `Length`                   | Gets the length of the string (property).    |
+| `ToUpper()`                | Converts the string to uppercase.           |
+| `ToLower()`                | Converts the string to lowercase.           |
+| `Trim()`                   | Removes leading and trailing whitespace.     |
+| `Substring(start, length)` | Extracts a substring from the string.        |
+| `Contains(value)`          | Checks if the string contains a value.       |
+| `Replace(oldValue, newValue)` | Replaces occurrences of a substring.      |
+| `IndexOf(value)`           | Finds the index of the first occurrence of a value. |
+| `Join(separator, array)`   | Joins an array of strings with a separator.  |
+
+### list
+#### expression
 ```js
 var l = [1,2,3,4];
 ```
-
-### list operation
+#### operation
 ```c#
 var l = [1, 2];
 print l * 2; // [1, 2, 1, 2]
 print l + [3, 4]; // [1, 2, 3, 4]
 ```
+#### intrinsics
+| Function         | Description                                  |
+|------------------|----------------------------------------------|
+| `Add(item)`      | Adds an item to the list.                   |
+| `Remove(item)`   | Removes the first occurrence of an item.    |
+| `Contains(item)` | Checks if the list contains an item.        |
+| `Sort()`         | Sorts the list in ascending order.          |
+| `Count`          | Gets the number of elements in the list (property). |
 
-### map expression
+### map 
+#### expression
 ```js
 var m = {1:1, "key":"value", l:"object"};
 ```
-
-### map operation
+#### operation
 ```c#
 var a = {"a": 1, "b": 2};
 var b = {"a": 2, "c": 3, "d": 4};
 print a + b; // {"a": 2, "b": 2, "c": 3, "d": 4}
 ```
+#### intrinsics
+| Function            | Description                             |
+|---------------------|-----------------------------------------|
+| `Add(key, value)`   | Adds a key-value pair to the map.       |
+| `Remove(key)`       | Removes an entry by its key.            |
+| `ContainsKey(key)`  | Checks if a specific key exists in the map. |
+| `Count`             | Gets the number of key-value pairs in the map (property). |
 
 ### subscript
 ```js
