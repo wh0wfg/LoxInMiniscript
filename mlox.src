@@ -50,6 +50,7 @@ TokenType = {
 "FINALLY": "FINALLY",
 "THROW": "THROW",
 "IF": "IF",
+"QUESTION": "QUESTION",
 "NIL": "NIL",
 "OR": "OR",
 "PRINT": "PRINT",
@@ -219,6 +220,8 @@ ScanToken = function(scanner)
         AddToken(@scanner, @TokenType.COMMA)
     else if @c == "." then
         AddToken(@scanner, @TokenType.DOT)
+    else if @c == "?" then
+        AddToken(@scanner, @TokenType.QUESTION)
     else if @c == "-" then
         if ScannerMatch(@scanner, "-") then
             AddToken(@scanner, @TokenType.DECREMENT)
@@ -305,6 +308,7 @@ ExprAccept = function(expr, visitor)
     case = @expr[0]
     if case == "Assign" then return VisitorVisitAssignExpr(@visitor, @expr)
     if case == "Binary" then return VisitorVisitBinaryExpr(@visitor, @expr)
+    if case == "Ternary" then return VisitorVisitTenaryExpr(@visitor, @expr)
     if case == "Call" then return VisitorVisitCallExpr(@visitor, @expr)
     if case == "Get" then return VisitorVisitGetExpr(@visitor, @expr)
     if case == "Subscript" then return VisitorVisitSubscriptExpr(@visitor, @expr)
@@ -329,6 +333,13 @@ end function
 // @value       expr[2] Expr
 NewAssignExpr = function(_name, value)
     return ["Assign", @_name, @value, rnd]
+end function
+// ternary
+// @condition   expr[1] Expr
+// @thenBranch  expr[2] Expr
+// @elseBranch  expr[3] Expr
+NewTenaryExpr = function(condition, thenBranch, elseBranch)
+    return ["Ternary", @condition, @thenBranch, @elseBranch, rnd]
 end function
 // binary
 // @left        expr[1] Expr
@@ -943,7 +954,7 @@ ParserBlock = function(parser)
 end function
 // @throwable
 ParserAssignment = function(parser)
-    expr = ParserOr(@parser)
+    expr = ParserTenary(@parser)
     if @expr isa @RuntimeException then return @expr
 
     if ParserMatch(@parser, [@TokenType.EQUAL, @TokenType.PLUS_ASSIGN, @TokenType.MINUS_ASSIGN, @TokenType.MUL_ASSIGN, @TokenType.DIV_ASSIGN, @TokenType.MOD_ASSIGN]) then
@@ -999,6 +1010,26 @@ ParserAssignment = function(parser)
         end if
 
         ParserError(@equals, "Invalid assignment target.")
+    end if
+
+    return @expr
+end function
+// @throwable
+ParserTenary = function(parser)
+    expr = ParserOr(@parser)
+    if @expr isa @RuntimeException then return @expr
+
+    if ParserMatch(@parser, [@TokenType.QUESTION]) then
+        thenBranch = ParserExpression(@parser)
+        if @thenBranch isa @RuntimeException then return @thenBranch
+
+        throw = ParserConsume(@parser, @TokenType.COLON, "Expect ':' after then branch.")
+        if @throw isa @RuntimeException then return @throw
+
+        elseBranch = ParserTenary(@parser)
+        if @elseBranch isa @RuntimeException then return @elseBranch
+
+        return NewTenaryExpr(@expr, @thenBranch, @elseBranch)
     end if
 
     return @expr
@@ -1693,6 +1724,14 @@ VisitorVisitBinaryExpr = function(visitor, expr)
     end if
 end function
 // @throwable
+VisitorVisitTenaryExpr = function(visitor, expr)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitTenaryExpr(@visitor, @expr)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitTenaryExpr(@visitor, @expr)
+    end if
+end function
+// @throwable
 VisitorVisitCallExpr = function(visitor, expr)
     if @visitor[-1] == "Interpreter" then
         return IntrpVisitCallExpr(@visitor, @expr)
@@ -2068,6 +2107,15 @@ ResolverVisitBinaryExpr = function(resolver, expr)
     throw = ResolverResolveExpr(@resolver, @expr[1])
     if @throw isa @RuntimeException then return @throw
     ResolverResolveExpr(@resolver, @expr[3])
+end function
+// @throwable
+ResolverVisitTenaryExpr = function(resolver, expr)
+    throw = ResolverResolveExpr(@resolver, @expr[1])
+    if @throw isa @RuntimeException then return @throw
+    throw = ResolverResolveExpr(@resolver, @expr[2])
+    if @throw isa @RuntimeException then return @throw
+    throw = ResolverResolveExpr(@resolver, @expr[3])
+    if @throw isa @RuntimeException then return @throw
 end function
 // @throwable
 ResolverVisitCallExpr = function(resolver, expr)
@@ -2916,6 +2964,16 @@ IntrpVisitBinaryExpr = function(intrp, expr)
     return null
 end function
 // @throwable
+IntrpVisitTenaryExpr = function(intrp, expr)
+    condition = IntrpEvaluate(@intrp, @expr[1])
+    if @condition isa @RuntimeException then return @condition
+    if IntrpIsTruthy(@condition) then
+        return IntrpEvaluate(@intrp, @expr[2])
+    else
+        return IntrpEvaluate(@intrp, @expr[3])
+    end if
+end function
+// @throwable
 IntrpVisitCallExpr = function(intrp, expr)
     callee = IntrpEvaluate(@intrp, @expr[1])
     if @callee isa @RuntimeException then return @callee
@@ -3428,6 +3486,10 @@ IntrpUnitTests = function
         "a -= 1;",
         "print a;",
         "print a % 2;",
+    ]
+    tenary = [
+        "var x = 3;",
+        "print x == 3 ? ""x is 3"" : ""x is not 3"";",
     ]
     runSource(augOprations.join(char(10)))
 end function

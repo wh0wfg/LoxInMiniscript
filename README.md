@@ -2,7 +2,7 @@
 
 ## Extended Features
 
-### operation
+### unary operation
 ```c#
 var a=1;
 print a++; // 1
@@ -11,6 +11,19 @@ print ++a; // 3
 a -= 1; // +=, *=, /=, %=
 print a; // 2
 print a%2; // 0
+```
+
+### ternary conditional operation
+```c#
+var x = 3;
+print x == 3 ? "x is 3" : "x is not 3";
+```
+
+### compound assignment
+```c#
+var x=3;
+x *= 2; // +=, -=, /=, %= 
+print x; // 6
 ```
 
 ### tail call optimization
