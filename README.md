@@ -187,12 +187,24 @@ Here are possible types of each arugment:
 | Instance    | list from NewLoxInstance|
 | Function    | list from NewLoxFunction|
 
-| Extended Type | Type in Miniscript |
-| -----------   | -------            |
-| Intrinsic     | list from AddIntrinsic |
-| List          | list from NewLoxList   |
-| Map           | list from NewLoxMap    |
+| Extended Type     | Type in Miniscript        |
+| -----------       | -------                   |
+| Intrinsic         | list from AddIntrinsic    |
+| List              | list from NewLoxList      |
+| Map               | list from NewLoxMap       |
 
+
+RuntimeException and Throw types are only availalbe in catch block, others it will be automatically handled.
+
+All technical types are subclasses of RuntimeException, besides RuntimeException itself.
+
+| Technical Type    | Type in Miniscript        |
+| -----------       | -------                   |
+| RuntimeException  | map from NewRuntimeException|
+| Return       | map from NewReturn |
+| Throw        | map from NewThrow  |
+| Break        | map from NewBreak  |
+| Continue     | map from NewContinue  |
 For simple lox type variables (string, number ....), you can simply treat them as normal miniscript type.
 
 Under most situations, you will not use intrp.
