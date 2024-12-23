@@ -122,7 +122,8 @@ AddIntrinsic takes three arguments
 - arity: number of arguments
 - callable: function to call, must accept 2 parameters.
 
-**intrp**: Lox Interpreter
+**intrp**: Lox Interpreter (usually you will not use it)
+
 **argumments**: List of arguments
 
 Here are possible types of each arugment:

@@ -34,6 +34,9 @@ TokenType = {
 "FOREACH": "FOREACH",
 "IN": "IN",
 "FOR": "FOR",
+"SWITCH": "SWITCH",
+"CASE": "CASE",
+"DEFAULT": "DEFAULT",
 "IF": "IF",
 "NIL": "NIL",
 "OR": "OR",
@@ -59,6 +62,9 @@ keywords = {
     "for": TokenType.FOR,
     "fun": TokenType.FUN,
     "lambda": TokenType.LAMBDA,
+    "switch": TokenType.SWITCH,
+    "case": TokenType.CASE,
+    "default": TokenType.DEFAULT,
     "if": TokenType.IF,
     "nil": TokenType.NIL,
     "or": TokenType.OR,
@@ -473,6 +479,7 @@ end function
 ParserStatement = function(parser)
     if ParserMatch(@parser, [@TokenType.FOREACH]) then return ParserForeachStatement(@parser)
     if ParserMatch(@parser, [@TokenType.FOR]) then return ParserForStatement(@parser)
+    if ParserMatch(@parser, [@TokenType.SWITCH]) then return ParserSwitchStatement(@parser)
     if ParserMatch(@parser, [@TokenType.IF]) then return ParserIfStatement(@parser)
     if ParserMatch(@parser, [@TokenType.PRINT]) then return ParserPrintStatement(@parser)
     if ParserMatch(@parser, [@TokenType.RETURN]) then return ParserReturnStatement(@parser)
@@ -561,6 +568,55 @@ ParserForStatement = function(parser)
     end if
 
     return @body
+end function
+// @throwable
+ParserSwitchStatement = function(parser)
+    throw = ParserConsume(@parser, @TokenType.LEFT_PAREN, "Expect '(' after 'switch'.")
+    if @throw isa @RuntimeException then return @throw
+
+    value = ParserExpression(@parser)
+    if @value isa @RuntimeException then return @value
+
+    throw = ParserConsume(@parser, @TokenType.RIGHT_PAREN, "Expect ')' after switch value.")
+    if @throw isa @RuntimeException then return @throw
+
+    throw = ParserConsume(@parser, @TokenType.LEFT_BRACE, "Expect '{' before switch cases.")
+    if @throw isa @RuntimeException then return @throw
+
+    cases = []
+    while not ParserCheck(@parser, @TokenType.RIGHT_BRACE) and not ParserIsAtEnd(@parser)
+        if ParserMatch(@parser, [@TokenType.CASE]) then
+            value = ParserExpression(@parser)
+            if @value isa @RuntimeException then return @value
+
+            throw = ParserConsume(@parser, @TokenType.COLON, "Expect ':' after case value.")
+            if @throw isa @RuntimeException then return @throw
+
+            statements = []
+            while not ParserCheck(@parser, [@TokenType.CASE, @TokenType.DEFAULT, @TokenType.RIGHT_BRACE]) and not ParserIsAtEnd(@parser)
+                statements.push(ParserDeclaration(@parser))
+            end while
+
+            cases.push(NewSwitchCaseStmt(@value, @statements))
+        else if ParserMatch(@parser, [@TokenType.DEFAULT]) then
+            throw = ParserConsume(@parser, @TokenType.COLON, "Expect ':' after 'default'.")
+            if @throw isa @RuntimeException then return @throw
+
+            statements = []
+            while not ParserCheck(@parser, [@TokenType.CASE, @TokenType.DEFAULT, @TokenType.RIGHT_BRACE]) and not ParserIsAtEnd(@parser)
+                statements.push(ParserDeclaration(@parser))
+            end while
+
+            cases.push(NewSwitchCaseStmt(null, @statements))
+        else
+            ParserError(ParserPeek(@parser), "Expect 'case' or 'default' in switch statement.")
+        end if
+    end while
+
+    throw = ParserConsume(@parser, @TokenType.RIGHT_BRACE, "Expect '}' after switch cases.")
+    if @throw isa @RuntimeException then return @throw
+
+    return NewSwitchStmt(@value, @cases)
 end function
 // @throwable
 ParserIfStatement = function(parser)
@@ -1152,6 +1208,18 @@ end function
 // @body        stmt[3] Stmt[]
 NewFunctionStmt = function(_name, _params, body)
     return ["Function", @_name, @_params, @body, rnd]
+end function
+// case
+// @value       stmt[1] Expr
+// @statements  stmt[2] Stmt[]
+NewSwitchCaseStmt = function(value, statements)
+    return ["SwitchCase", @value, @statements, rnd]
+end function
+// switch
+// @value       stmt[1] Expr
+// @cases       stmt[2] Stmt[]
+NewSwitchStmt = function(value, cases)
+    return ["Switch", @value, @cases, rnd]
 end function
 // if
 // @condition   stmt[1] Expr
