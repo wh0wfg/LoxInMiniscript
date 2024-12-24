@@ -2,6 +2,15 @@
 
 ## Extended Features
 
+### intrinsic functions
+Most of the intrinsic functions are simply wrappers around the [miniscript intrinsic function](https://miniscript.org/files/MiniScript-Manual.pdf#page=26&zoom=100,80,80)
+
+However, it's important to note the distinction in Lox:
+- a.len accesses the property of a.
+- a.len() calls the method of a.
+  
+**NOTE:** Many intrinsic functions are
+ not been tested and may contain errors or unexpected behaviors.
 ### unary operation
 ```c#
 var a=1;
@@ -131,7 +140,6 @@ foreach (var i in l) {
     print -1;
 }
 ```
-**NOTE:** The following functions are not been tested and may contain errors or unexpected behaviors.
 
 ### string intrinsics
 | Function    | Description                                  |
