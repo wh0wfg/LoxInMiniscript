@@ -145,17 +145,6 @@ foreach (var i in l) {
 }
 ```
 
-### string intrinsics
-| Function    | Description                                  |
-|-------------|----------------------------------------------|
-| len         | Gets the length of the string (property).    |
-| upper()     | Converts the string to uppercase.           |
-| lower()     | Converts the string to lowercase.           |
-| trim()      | Removes leading and trailing whitespace.     |
-| indexOf(value) | Finds the index of the first occurrence of a value. |
-| replace(oldValue, newValue) | Replaces occurrences of a substring.  |
-| split(separator) | Splits the string into parts based on a separator. |
-
 ### list
 #### expression
 ```js
@@ -167,14 +156,6 @@ var l = [1, 2];
 print l * 2; // [1, 2, 1, 2]
 print l + [3, 4]; // [1, 2, 3, 4]
 ```
-#### intrinsics
-| Function    | Description                                  |
-|-------------|----------------------------------------------|
-| push(item)  | Adds an item to the list.                   |
-| remove(item)| Removes the first occurrence of an item.    |
-| hasIndex(index) | Checks if a specific index exists in the list. |
-| sort()      | Sorts the list in ascending order.          |
-| len         | Gets the number of elements in the list (property). |
 
 ### map 
 #### expression
@@ -187,13 +168,6 @@ var a = {"a": 1, "b": 2};
 var b = {"a": 2, "c": 3, "d": 4};
 print a + b; // {"a": 2, "b": 2, "c": 3, "d": 4}
 ```
-#### intrinsics
-| Function       | Description                             |
-|----------------|-----------------------------------------|
-| remove(key)    | Removes an entry by its key.            |
-| hasIndex(key)  | Checks if a specific key exists in the map. |
-| len            | Gets the number of key-value pairs in the map (property). |
-
 ### subscript
 ```js
 l = l[1];

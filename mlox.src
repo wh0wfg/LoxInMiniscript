@@ -2556,33 +2556,58 @@ AddStrIntrs = function(_name, arity, callable, isProperty=null)
     if @isProperty == null then isProperty = false
     StrIntrs[@_name] = ["StrIntr", @arity, @callable, @isProperty]
 end function
-strLen = function(_str, intrp, arguments)
-    return _str.len
+strCode = function(_str, intrp, arguments)
+    return _str.code
 end function
-AddStrIntrs("len", null, @strLen, true)
-strUpper = function(_str, intrp, arguments)
-    return _str.upper
-end function
-AddStrIntrs("upper", 0, @strUpper)
-strLower = function(_str, intrp, arguments)
-    return _str.lower
-end function
-AddStrIntrs("lower", 0, @strLower)
-strTrim = function(_str, intrp, arguments)
-    return _str.trim
-end function
-AddStrIntrs("trim", 0, @strTrim)
+AddStrIntrs("code", null, @strCode, true)
+strHasIndex = function(_str, intrp, arguments)
+    return _str.hasIndex(@arguments[0])
+end function    
+AddStrIntrs("hasIndex", 1, @strHasIndex)
 strIndexOf = function(_str, intrp, arguments)
     return _str.indexOf(@arguments[0])
 end function
 AddStrIntrs("indexOf", 1, @strIndexOf)
+strInsert = function(_str, intrp, arguments)
+    return _str.insert(@arguments[0], @arguments[1])
+end function
+AddStrIntrs("insert", 2, @strInsert)
+strLen = function(_str, intrp, arguments)
+    return _str.len
+end function
+AddStrIntrs("len", null, @strLen, true)
+strLower = function(_str, intrp, arguments)
+    return _str.lower
+end function
+AddStrIntrs("lower", null, @strLower, true)
+strRemove = function(_str, intrp, arguments)
+    return _str.remove(@arguments[0])
+end function
+AddStrIntrs("remove", 1, @strRemove)
 strReplace = function(_str, intrp, arguments)
-    return _str.replace(@arguments[0], @arguments[1])
+    return _str.replace(@arguments[0], @arguments[1], @arguments[2])
 end function
-AddStrIntrs("replace", 2, @strReplace)
+AddStrIntrs("replace", 3, @strReplace)
+strUpper = function(_str, intrp, arguments)
+    return _str.upper
+end function
+AddStrIntrs("upper", null, @strUpper, true)
+strVal = function(_str, intrp, arguments)
+    return _str.val
+end function
+AddStrIntrs("val", null, @strVal, true)
+strValues = function(_str, intrp, arguments)
+    return _str.values
+end function
+AddStrIntrs("values", null, @strValues, true)
+strSlice = function(_str, intrp, arguments)
+    return _str.slice(@arguments[0], @arguments[1])
+end function
+AddStrIntrs("slice", 2, @strSlice)
 strSplit = function(_str, intrp, arguments)
-    return _str.split(@arguments[0])
+    return _str.split(@arguments[0], @arguments[1])
 end function
+AddStrIntrs("split", 2, @strSplit)
 ListIntrs = {}
 // See AddStrIntrs
 AddListIntrs = function(_name, arity, callable, isProperty=null)
