@@ -2556,93 +2556,77 @@ AddStrIntrs = function(_name, arity, callable, isProperty=null)
     if @isProperty == null then isProperty = false
     StrIntrs[@_name] = ["StrIntr", @arity, @callable, @isProperty]
 end function
-strLength = function(_str, intrp, arguments)
+strLen = function(_str, intrp, arguments)
     return _str.len
 end function
-AddStrIntrs("Length", null, @strLength, true)
-strToUpper = function(_str, intrp, arguments)
+AddStrIntrs("len", null, @strLen, true)
+strUpper = function(_str, intrp, arguments)
     return _str.upper
 end function
-AddStrIntrs("ToUpper", 0, @strToUpper)
-strToLower = function(_str, intrp, arguments)
+AddStrIntrs("upper", 0, @strUpper)
+strLower = function(_str, intrp, arguments)
     return _str.lower
 end function
-AddStrIntrs("ToLower", 0, @strToLower)
+AddStrIntrs("lower", 0, @strLower)
 strTrim = function(_str, intrp, arguments)
     return _str.trim
 end function
-AddStrIntrs("Trim", 0, @strTrim)
-strSubstring = function(_str, intrp, arguments)
-    return _str[@arguments[0]: @arguments[0]+@arguments[1]]
-end function
-AddStrIntrs("Substring", 2, @strSubstring)
-strContains = function(_str, intrp, arguments)
-    return _str.indexOf(@arguments[0]) != null
-end function
-AddStrIntrs("Contains", 1, @strContains)
-strReplace = function(_str, intrp, arguments)
-    return _str.replace(@arguments[0], @arguments[1])
-end function
-AddStrIntrs("Replace", 2, @strReplace)
+AddStrIntrs("trim", 0, @strTrim)
 strIndexOf = function(_str, intrp, arguments)
     return _str.indexOf(@arguments[0])
 end function
-AddStrIntrs("IndexOf", 1, @strIndexOf)
+AddStrIntrs("indexOf", 1, @strIndexOf)
+strReplace = function(_str, intrp, arguments)
+    return _str.replace(@arguments[0], @arguments[1])
+end function
+AddStrIntrs("replace", 2, @strReplace)
 strSplit = function(_str, intrp, arguments)
     return _str.split(@arguments[0])
 end function
-strJoin = function(_str, intrp, arguments)
-    return @arguments[0][1].join(@_str)
-end function
-AddStrIntrs("Join", 1, @strJoin)
 ListIntrs = {}
 // See AddStrIntrs
 AddListIntrs = function(_name, arity, callable, isProperty=null)
     if @isProperty == null then isProperty = false
     ListIntrs[@_name] = ["ListIntr", @arity, @callable, @isProperty]
 end function
-listAdd = function(_list, intrp, arguments)
+listPush = function(_list, intrp, arguments)
     _list[1].push(@arguments[0])
 end function
-AddListIntrs("Add", 1, @listAdd)
+AddListIntrs("push", 1, @listPush)
 listRemove = function(_list, intrp, arguments)
     _list[1].remove(@arguments[0])
 end function
-AddListIntrs("Remove", 1, @listRemove)
-listContains = function(_list, intrp, arguments)
+AddListIntrs("remove", 1, @listRemove)
+listHasIndex = function(_list, intrp, arguments)
     return _list[1].hasIndex(@arguments[0])
 end function
-AddListIntrs("Contains", 1, @listContains)
+AddListIntrs("hasIndex", 1, @listHasIndex)
 listSort = function(_list, intrp, arguments)
     _list[1].sort()
 end function
-AddListIntrs("Sort", 0, @listSort)
-listCount = function(_list, intrp, arguments)
+AddListIntrs("sort", 0, @listSort)
+listLen = function(_list, intrp, arguments)
     return _list[1].len
 end function
-AddListIntrs("Count", null, @listCount, true)
+AddListIntrs("len", null, @listLen, true)
 // see AddStrIntrs
 MapIntrs = {}
 AddMapIntrs = function(_name, arity, callable, isProperty=null)
     if @isProperty == null then isProperty = false
     MapIntrs[@_name] = ["MapIntr", @arity, @callable, @isProperty]
 end function
-mapAdd = function(_map, intrp, arguments)
-    _map[1][@arguments[0]] = @arguments[1]
-end function
-AddMapIntrs("Add", 2, @mapAdd)
 mapRemove = function(_map, intrp, arguments)
     _map[1].remove(@arguments[0])
 end function
-AddMapIntrs("Remove", 1, @mapRemove)
-mapContainsKey = function(_map, intrp, arguments)
+AddMapIntrs("remove", 1, @mapRemove)
+mapHasIndex = function(_map, intrp, arguments)
     return _map[1].hasIndex(@arguments[0])
 end function
-AddMapIntrs("ContainsKey", 1, @mapContainsKey)
-mapCount = function(_map, intrp, arguments)
+AddMapIntrs("hasIndex", 1, @mapHasIndex)
+mapLen = function(_map, intrp, arguments)
     return _map[1].len
 end function
-AddMapIntrs("Count", null, @mapCount, true)
+AddMapIntrs("len", null, @mapLen, true)
 // { "xxx": ["xxx", arity, @callable] }
 // @arity    intrinsics[1] number
 // @callable intrinsics[2] callable
@@ -3639,7 +3623,7 @@ IntrpUnitTests = function
     intrinsic = [
 		"var a = ""abcdefg"";",
         "var s= 1;",
-		"a.Substring(s, 1+1);",
+		"print a.len;",
     ]
     runSource(intrinsic.join(char(10)))
 end function
