@@ -2642,6 +2642,86 @@ clockIntrinsic = function(intrp, arguments)
     return time
 end function
 AddIntrinsic("clock", 0, @clockIntrinsic)
+absIntrinsic = function(intrp, arguments)
+    return abs(@arguments[0])
+end function
+AddIntrinsic("abs", 1, @absIntrinsic)
+acosIntrinsic = function(intrp, arguments)
+    return acos(@arguments[0])
+end function
+AddIntrinsic("acos", 1, @acosIntrinsic)
+asinIntrinsic = function(intrp, arguments)
+    return asin(@arguments[0])
+end function
+AddIntrinsic("asin", 1, @asinIntrinsic)
+atanIntrinsic = function(intrp, arguments)
+    return atan(@arguments[0])
+end function
+AddIntrinsic("atan", 1, @atanIntrinsic)
+bitAndIntrinsic = function(intrp, arguments)
+    return bitAnd(@arguments[0], @arguments[1])
+end function
+AddIntrinsic("bitAnd", 2, @bitAndIntrinsic)
+bitOrIntrinsic = function(intrp, arguments)
+    return bitOr(@arguments[0], @arguments[1])
+end function
+AddIntrinsic("bitOr", 2, @bitOrIntrinsic)
+bitXorIntrinsic = function(intrp, arguments)
+    return bitXor(@arguments[0], @arguments[1])
+end function
+AddIntrinsic("bitXor", 2, @bitXorIntrinsic)
+ceilIntrinsic = function(intrp, arguments)
+    return ceil(@arguments[0])
+end function
+AddIntrinsic("ceil", 1, @ceilIntrinsic)
+charIntrinsic = function(intrp, arguments)
+    return char(@arguments[0])
+end function
+AddIntrinsic("char", 1, @charIntrinsic)
+cosIntrinsic = function(intrp, arguments)
+    return cos(@arguments[0])
+end function
+AddIntrinsic("cos", 1, @cosIntrinsic)
+floorIntrinsic = function(intrp, arguments)
+    return floor(@arguments[0])
+end function
+AddIntrinsic("floor", 1, @floorIntrinsic)
+logIntrinsic = function(intrp, arguments)
+    return log(@arguments[0], @arguments[1])
+end function
+AddIntrinsic("log", 2, @logIntrinsic)
+rangeIntrinsic = function(intrp, arguments)
+    return range(@arguments[0], @arguments[1], @arguments[2])
+end function
+AddIntrinsic("range", 3, @rangeIntrinsic)
+roundIntrinsic = function(intrp, arguments)
+    return round(@arguments[0])
+end function
+AddIntrinsic("round", 1, @roundIntrinsic)
+rndIntrinsic = function(intrp, arguments)
+    return rnd(@arguments[0])
+end function
+AddIntrinsic("rnd", 1, @rndIntrinsic)
+signIntrinsic = function(intrp, arguments)
+    return sign(@arguments[0])
+end function
+AddIntrinsic("sign", 1, @signIntrinsic)
+sinIntrinsic = function(intrp, arguments)
+    return sin(@arguments[0])
+end function
+AddIntrinsic("sin", 1, @sinIntrinsic)
+sqrtIntrinsic = function(intrp, arguments)
+    return sqrt(@arguments[0])
+end function
+AddIntrinsic("sqrt", 1, @sqrtIntrinsic)
+strIntrinsic = function(intrp, arguments)
+    return str(@arguments[0])
+end function
+AddIntrinsic("str", 1, @strIntrinsic)
+tanIntrinsic = function(intrp, arguments)
+    return tan(@arguments[0])
+end function
+AddIntrinsic("tan", 1, @tanIntrinsic)
 // interpreter
 // ClockFn = ["ClockFn"]
 // @globals     intrp[0] Environment
@@ -2656,6 +2736,7 @@ NewInterpreter = function
     for intrinsicName in Intrinsics.indexes
         EnvironmentDefine(@_globals, @intrinsicName, @Intrinsics[@intrinsicName])
     end for
+    EnvironmentDefine(@_globals, "pi", pi)
     // EnvironmentDefine(@_globals, "clock", @ClockFn)
     return [_globals, @environment, @_locals, false, false, "Interpreter"]
 end function
@@ -3621,9 +3702,7 @@ IntrpUnitTests = function
         "print x == 3 ? ""x is 3"" : ""x is not 3"";",
     ]
     intrinsic = [
-		"var a = ""abcdefg"";",
-        "var s= 1;",
-		"print a.len;",
+		"print pi;",
     ]
     runSource(intrinsic.join(char(10)))
 end function
