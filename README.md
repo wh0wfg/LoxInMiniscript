@@ -3,6 +3,9 @@
 ## Extended Features
 
 ### intrinsic functions
+
+abs, acos, asin, atan, bitAnd, bitOr, bitXor, ceil, char, cos, oor, log, pi, range, round, rnd, sign, sin, sqrt, str, tan
+
 Most of the intrinsic functions are simply wrappers around the [miniscript intrinsic function](https://miniscript.org/files/MiniScript-Manual.pdf#page=26&zoom=100,80,80)
 
 However, it's important to note the distinction in Lox:
@@ -11,6 +14,7 @@ However, it's important to note the distinction in Lox:
   
 **NOTE:** Many intrinsic functions are
  not been tested and may contain errors or unexpected behaviors.
+
 ### unary operation
 ```c#
 var a=1;
