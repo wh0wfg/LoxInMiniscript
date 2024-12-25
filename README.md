@@ -15,6 +15,16 @@ However, it's important to note the distinction in Lox:
 **NOTE:** Many intrinsic functions are
  not been tested and may contain errors or unexpected behaviors.
 
+### parameter with default value
+```c#
+fn f(a=4, b=1) {
+    return a+b;
+}
+print f(); // 5
+print f(1); // 2
+print f(1, 2); // 3
+```
+
 ### unary operation
 ```c#
 var a=1;

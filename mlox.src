@@ -327,6 +327,7 @@ ExprAccept = function(expr, visitor)
     if case == "Postfix" then return VisitorVisitPostfixExpr(@visitor, @expr)
     if case == "Prefix" then return VisitorVisitPrefixExpr(@visitor, @expr)
     if case == "Variable" then return VisitorVisitVariableExpr(@visitor, @expr)
+    if case == "Parameter" then return VisitorVisitParameterExpr(@visitor, @expr)
 end function
 // assign
 // @name        expr[1] Token
@@ -443,6 +444,14 @@ end function
 // @name        expr[1] Token
 NewVariableExpr = function(_name)
     return ["Variable", @_name, rnd]
+end function
+// parameter
+// @name        expr[1] Token
+// @default     expr[2] Expr
+// @hasDefault  expr[3] Boolean
+// default will be dynamic evaluated by the interpreter
+NewParameterExpr = function(_name, default, hasDefault)
+    return ["Parameter", @_name, @default, @hasDefault, rnd]
 end function
 // lambda
 // @name        expr[1] Token
@@ -914,19 +923,32 @@ ParserFunction = function(parser, kind)
     parameters = []
     if not ParserCheck(@parser, @TokenType.RIGHT_PAREN) then
         // do-while
-        if parameters.len >= 255 then
-            ParserError(ParserPeek(@parser), "Cannot have more than 255 parameters.")
-        end if
+        // if parameters.len >= 255 then
+        //     ParserError(ParserPeek(@parser), "Cannot have more than 255 parameters.")
+        // end if
         throw = ParserConsume(@parser, @TokenType.IDENTIFIER, "Expect parameter name.")
         if @throw isa @RuntimeException then return @throw
-        parameters.push(@throw)
+
+        if ParserMatch(@parser, [@TokenType.EQUAL]) then
+            default = ParserExpression(@parser)
+            if @default isa @RuntimeException then return @default
+            parameters.push(NewParameterExpr(@throw, @default, true))
+        else
+            parameters.push(NewParameterExpr(@throw, null, false))
+        end if
         while ParserMatch(@parser, [@TokenType.COMMA])
-            if parameters.len >= 255 then
-                ParserError(ParserPeek(@parser), "Cannot have more than 255 parameters.")
-            end if
+            // if parameters.len >= 255 then
+            //     ParserError(ParserPeek(@parser), "Cannot have more than 255 parameters.")
+            // end if
             throw = ParserConsume(@parser, @TokenType.IDENTIFIER, "Expect parameter name.")
             if @throw isa @RuntimeException then return @throw
-            parameters.push(@throw)
+            if ParserMatch(@parser, [@TokenType.EQUAL]) then
+                default = ParserExpression(@parser)
+                if @default isa @RuntimeException then return @default
+                parameters.push(NewParameterExpr(@throw, @default, true))
+            else
+                parameters.push(NewParameterExpr(@throw, null, false))
+            end if
         end while
     end if
 
@@ -1203,16 +1225,16 @@ ParserFinishCall = function(parser, callee)
     arguments = []
     if not ParserCheck(@parser, @TokenType.RIGHT_PAREN) then
         // do-while
-        if arguments.len >= 255 then
-            ParserError(ParserPeek(@parser), "Cannot have more than 255 arguments.")
-        end if
+        // if arguments.len >= 255 then
+        //     ParserError(ParserPeek(@parser), "Cannot have more than 255 arguments.")
+        // end if
         expr = ParserExpression(@parser)
         if @expr isa @RuntimeException then return @expr
         arguments.push(expr)
         while ParserMatch(@parser, [@TokenType.COMMA])
-            if arguments.len >= 255 then
-                ParserError(ParserPeek(@parser), "Cannot have more than 255 arguments.")
-            end if
+            // if arguments.len >= 255 then
+            //     ParserError(ParserPeek(@parser), "Cannot have more than 255 arguments.")
+            // end if
             expr = ParserExpression(@parser)
             if @expr isa @RuntimeException then return @expr
             arguments.push(expr)
@@ -1484,7 +1506,7 @@ NewExpressionStmt = function(expression)
 end function
 // function
 // @name        stmt[1] Token
-// @params  stmt[2] Token[]
+// @params      stmt[2] paramExpr[]
 // @body        stmt[3] Stmt[]
 NewFunctionStmt = function(_name, _params, body)
     return ["Function", @_name, @_params, @body, rnd]
@@ -1875,6 +1897,14 @@ VisitorVisitVariableExpr = function(visitor, expr)
         return ResolverVisitVariableExpr(@visitor, @expr)
     end if
 end function
+// @throwable
+VisitorVisitParameterExpr = function(visitor, expr)
+    if @visitor[-1] == "Interpreter" then
+        return IntrpVisitParameterExpr(@visitor, @expr)
+    else if @visitor[-1] == "Resolver" then
+        return ResolverVisitParameterExpr(@visitor, @expr)
+    end if
+end function
 // resolver
 FunctionType = {
     "NONE": "NONE",
@@ -2247,6 +2277,16 @@ ResolverVisitVariableExpr = function(resolver, expr)
     ResolverResolveLocal(@resolver, @expr, @expr[1])
 end function
 // @throwable
+ResolverVisitParameterExpr = function(resolver, expr)
+    ResolverDeclare(@resolver, @expr[1])
+    ResolverDefine(@resolver, @expr[1])
+
+    if @expr[2] != null then
+        throw = ResolverResolveExpr(@resolver, @expr[2])
+        if @throw isa @RuntimeException then return @throw
+    end if
+end function
+// @throwable
 ResolverResolveStmt = function(resolver, stmt)
     throw = StmtAccept(@stmt, @resolver)
     if @throw isa @RuntimeException then return @throw
@@ -2262,8 +2302,7 @@ ResolverResolveFunction = function(resolver, _function, type)
     @resolver[2] = @type
     ResolverBeginScope(@resolver)
     for param in @_function[2]
-        ResolverDeclare(@resolver, @param)
-        ResolverDefine(@resolver, @param)
+        ResolverResolveExpr(@resolver, @param)
     end for
     throw = ResolverResolve(@resolver, @_function[3])
     if @throw isa @RuntimeException then return @throw
@@ -2396,6 +2435,27 @@ LoxCallableArity = function(callable)
         return Intrinsics[@callable[0]][1]
     end if
 end function
+LoxCallableArityWithDefault = function(callable)
+    if @callable[0] == "LoxFunction" then
+        return callable[4]
+    end if
+    if @callable[0] == "LoxClass" then
+        return 0
+    end if
+    if @callable[0] == "StrIntr" then
+        return 0
+    end if
+    if @callable[0] == "ListIntr" then
+        return 0
+    end if
+    if @callable[0] == "MapIntr" then
+        return 0
+    end if
+    if  Intrinsics.hasIndex(@callable[0]) then
+        // return Intrinsics[@callable[0]][1](@callable)
+        return 0
+    end if
+end function
 // @catchable
 // @throwable
 LoxCallableCall = function(callable, intrp, arguments)
@@ -2408,7 +2468,11 @@ LoxCallableCall = function(callable, intrp, arguments)
     if @callable[0] == "LoxFunction" then
         environment = NewEnvironment(@callable[2])
         for i in range(0, callable[1][2].len - 1, 1)
-            EnvironmentDefine(@environment, @callable[1][2][@i][1], @arguments[@i])
+            if i < arguments.len then
+                EnvironmentDefine(@environment, @callable[1][2][@i][1][1], @arguments[@i])
+            else
+                EnvironmentDefine(@environment, @callable[1][2][@i][1][1], @callable[1][2][@i][2])
+            end if
         end for
         
         throw = IntrpExecuteBlock(@intrp, @callable[1][3], @environment)
@@ -2456,13 +2520,20 @@ end function
 // @declaration     function[1] FunctionStmt
 // @closure         function[2] Environment
 // @isInitializer   function[3] boolean
+// @arityWithDefault function[4] int
 NewLoxFunction = function(declaration, closure, isInitializer)
-    return ["LoxFunction", @declaration, @closure, @isInitializer]
+    arityWithDefault = 0
+    for param in @declaration[2]
+        if @param[3] then
+            arityWithDefault = arityWithDefault + 1
+        end if
+    end for
+    return ["LoxFunction", @declaration, @closure, @isInitializer, arityWithDefault]
 end function
 LoxFunctionBind = function(fn, instance)
     environment = NewEnvironment(@fn[2])
     EnvironmentDefine(@environment, "this", @instance)
-    return NewLoxFunction(@fn[1], @environment, @fn[3])
+    return NewLoxFunction(@fn[1], @environment, @fn[3], @fn[4])
 end function
 // lox class
 // @name        class[1] string
@@ -2844,6 +2915,17 @@ IntrpVisitExpressionStmt = function(intrp, stmt)
 end function
 // @throwable
 IntrpVisitFunctionStmt = function(intrp, stmt)
+    for param in @stmt[2]
+        if param[2] != null then
+            throw = IntrpEvaluate(@intrp, @param[2])
+            if @throw isa @RuntimeException then return @throw
+
+            if not (@throw isa string or @throw isa number or @throw == null) then
+                return NewRuntimeError(@param[1], "Default value must be a literal.")
+            end if
+            param[2] = @throw
+        end if
+    end for
     _function = NewLoxFunction(@stmt, @intrp[1], false)
     throw = EnvironmentDefine(@intrp[1], @stmt[1][1], @_function)
     if @throw isa @RuntimeException then return @throw
@@ -2967,7 +3049,7 @@ IntrpVisitReturnStmt = function(intrp, stmt)
             return NewRuntimeError(@expr[2], "Can only call functions and classes.")
         end if
     
-        if arguments.len != LoxCallableArity(@callee) then
+        if arguments.len > LoxCallableArity(@callee) or arguments.len + LoxCallableArityWithDefault(@callee) < LoxCallableArity(@callee) then
             return NewRuntimeError(@expr[2], "Expected " + LoxCallableArity(@callee) + " arguments but got " + arguments.len + ".")
         end if
         
@@ -3185,7 +3267,7 @@ IntrpVisitCallExpr = function(intrp, expr)
         return NewRuntimeError(@expr[2], "Can only call functions and classes.")
     end if
 
-    if arguments.len != LoxCallableArity(@callee) then
+    if arguments.len > LoxCallableArity(@callee) or arguments.len + LoxCallableArityWithDefault(@callee) < LoxCallableArity(@callee) then
         return NewRuntimeError(@expr[2], "Expected " + LoxCallableArity(@callee) + " arguments but got " + arguments.len + ".")
     end if
 
@@ -3455,6 +3537,9 @@ end function
 // @throwable
 IntrpVisitVariableExpr = function(intrp, expr)
     return IntrpLookupVariable(@intrp, @expr[1], @expr)
+end function
+IntrpVisitParameterExpr = function(intrp, expr)
+    // do nothing
 end function
 IntrpLookupVariable = function(intrp, _name, expr)
     if @intrp[2].hasIndex(@expr) then
@@ -3729,6 +3814,13 @@ IntrpUnitTests = function
     intrinsic = [
 		"print pi;",
     ]
-    runSource(intrinsic.join(char(10)))
+    defaultParam = [
+        "fun f(a, b = 1) {",
+        "  return a + b;",
+        "}",
+        "print f(1);",
+        "print f(1, 2);",
+    ]
+    runSource(defaultParam.join(char(10)))
 end function
 IntrpUnitTests
