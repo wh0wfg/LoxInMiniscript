@@ -2452,8 +2452,7 @@ LoxCallableArityWithDefault = function(callable)
         return 0
     end if
     if  Intrinsics.hasIndex(@callable[0]) then
-        // return Intrinsics[@callable[0]][1](@callable)
-        return 0
+        return Intrinsics[@callable[0]][3]
     end if
 end function
 // @catchable
@@ -2513,6 +2512,9 @@ LoxCallableCall = function(callable, intrp, arguments)
         intrinsicFn = @Intrinsics[@callable[0]][2]
         intrp[3] = @preIsInLoop
         intrp[4] = @preIsInSwitch
+        for i in range(arguments.len, @Intrinsics[@callable[0]][1]-1, 1)
+            arguments.push(@Intrinsics[@callable[0]][4][i])
+        end for
         return intrinsicFn(@intrp, @arguments)
     end if
 end function
@@ -2731,8 +2733,13 @@ Intrinsics = {}
 // name: function name
 // arity: number of arguments
 // callable: function to call
-AddIntrinsic = function(_name, arity, callable)
-    Intrinsics[@_name] = [@_name, @arity, @callable]
+// arityWithDefault: number of arguments with defaults value
+// defaultArgs: list of default value for each argument. Indexes before arityWithDefault are ignored.
+AddIntrinsic = function(_name, arity, callable, arityWithDefault=0, defaultArgs = null)
+    if defaultArgs == null and arityWithDefault>0 then
+        exit("AddIntrinsic: len(defaultArgs) < arityWithDefault")
+    end if
+    Intrinsics[@_name] = [@_name, @arity, @callable, @arityWithDefault, @defaultArgs]
 end function
 clockIntrinsic = function(intrp, arguments)
     return time
@@ -2789,7 +2796,7 @@ AddIntrinsic("log", 2, @logIntrinsic)
 rangeIntrinsic = function(intrp, arguments)
     return range(@arguments[0], @arguments[1], @arguments[2])
 end function
-AddIntrinsic("range", 3, @rangeIntrinsic)
+AddIntrinsic("range", 3, @rangeIntrinsic, 2, [null, 0, null])
 roundIntrinsic = function(intrp, arguments)
     return round(@arguments[0])
 end function
@@ -3821,6 +3828,6 @@ IntrpUnitTests = function
         "print f(1);",
         "print f(1, 2);",
     ]
-    runSource(classInheritance.join(char(10)))
+    runSource(defaultParam.join(char(10)))
 end function
-IntrpUnitTests
+runPrompt
