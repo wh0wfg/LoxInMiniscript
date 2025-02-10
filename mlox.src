@@ -2521,8 +2521,8 @@ end function
 // @closure         function[2] Environment
 // @isInitializer   function[3] boolean
 // @arityWithDefault function[4] int
-NewLoxFunction = function(declaration, closure, isInitializer)
-    arityWithDefault = 0
+NewLoxFunction = function(declaration, closure, isInitializer, arityWithDefault=0)
+    arityWithDefault=0
     for param in @declaration[2]
         if @param[3] then
             arityWithDefault = arityWithDefault + 1
@@ -2533,7 +2533,7 @@ end function
 LoxFunctionBind = function(fn, instance)
     environment = NewEnvironment(@fn[2])
     EnvironmentDefine(@environment, "this", @instance)
-    return NewLoxFunction(@fn[1], @environment, @fn[3], @fn[4])
+    return NewLoxFunction(@fn[1], @environment, @fn[3])
 end function
 // lox class
 // @name        class[1] string
@@ -3821,6 +3821,6 @@ IntrpUnitTests = function
         "print f(1);",
         "print f(1, 2);",
     ]
-    runSource(defaultParam.join(char(10)))
+    runSource(classInheritance.join(char(10)))
 end function
 IntrpUnitTests
