@@ -2794,7 +2794,7 @@ logIntrinsic = function(intrp, arguments)
 end function
 AddIntrinsic("log", 2, @logIntrinsic)
 rangeIntrinsic = function(intrp, arguments)
-    return range(@arguments[0], @arguments[1], @arguments[2])
+    return NewLoxList(range(@arguments[0], @arguments[1], @arguments[2]))
 end function
 AddIntrinsic("range", 3, @rangeIntrinsic, 2, [null, 0, null])
 roundIntrinsic = function(intrp, arguments)
@@ -3140,7 +3140,7 @@ IntrpVisitForeachStmt = function(intrp, stmt)
 
         intrp[3] = @preIsInLoop
     else
-        return NewRuntimeError(@stmt[2][1], "Unsupported iterable type " + @iterable[0] + ".")
+        return NewRuntimeError(@stmt[1], "Unsupported iterable type " + @iterable[0] + ".")
     end if
 end function
 // @throwable
