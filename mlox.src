@@ -455,7 +455,7 @@ NewParameterExpr = function(_name, default, hasDefault)
 end function
 // lambda
 // @name        expr[1] Token
-// @parameters  expr[2] Token[]
+// @parameters  expr[2] ParamExpr[]
 // @body        expr[3] Stmt[]
 NewLambdaExpr = function(_name, parameters, body)
     return ["Lambda", @_name, @parameters, @body, rnd]
@@ -1327,19 +1327,34 @@ ParserPrimary = function(parser)
         parameters = []
         if not ParserCheck(@parser, @TokenType.RIGHT_PAREN) then
             // do-while
-            if parameters.len >= 255 then
-                ParserError(ParserPeek(@parser), "Cannot have more than 255 parameters.")
-            end if
+            // if parameters.len >= 255 then
+            //     ParserError(ParserPeek(@parser), "Cannot have more than 255 parameters.")
+            // end if
             throw = ParserConsume(@parser, @TokenType.IDENTIFIER, "Expect parameter name.")
             if @throw isa @RuntimeException then return @throw
-            parameters.push(@throw)
+            
+            if ParserMatch(@parser, [@TokenType.EQUAL]) then
+                default = ParserExpression(@parser)
+                if @default isa @RuntimeException then return @default
+                parameters.push(NewParameterExpr(@throw, @default, true))
+            else
+                parameters.push(NewParameterExpr(@throw, null, false))
+            end if
+
             while ParserMatch(@parser, [@TokenType.COMMA])
-                if parameters.len >= 255 then
-                    ParserError(ParserPeek(@parser), "Cannot have more than 255 parameters.")
-                end if
+                // if parameters.len >= 255 then
+                //     ParserError(ParserPeek(@parser), "Cannot have more than 255 parameters.")
+                // end if
                 throw = ParserConsume(@parser, @TokenType.IDENTIFIER, "Expect parameter name.")
                 if @throw isa @RuntimeException then return @throw
-                parameters.push(@throw)
+                
+                if ParserMatch(@parser, [@TokenType.EQUAL]) then
+                    default = ParserExpression(@parser)
+                    if @default isa @RuntimeException then return @default
+                    parameters.push(NewParameterExpr(@throw, @default, true))
+                else
+                    parameters.push(NewParameterExpr(@throw, null, false))
+                end if
             end while
         end if
 
@@ -3828,6 +3843,6 @@ IntrpUnitTests = function
         "print f(1);",
         "print f(1, 2);",
     ]
-    runSource(defaultParam.join(char(10)))
+    runSource(lambda.join(char(10)))
 end function
-runPrompt
+IntrpUnitTests
