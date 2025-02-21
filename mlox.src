@@ -2523,6 +2523,14 @@ LoxCallableCall = function(callable, intrp, arguments)
         ret = @callable[2]
         return ret(@callable[-1], @intrp, @arguments)
     end if
+    if @callable[0] == "ListIntr" then
+        ret = @callable[2]
+        return ret(@callable[-1], @intrp, @arguments)
+    end if
+    if @callable[0] == "MapIntr" then
+        ret = @callable[2]
+        return ret(@callable[-1], @intrp, @arguments)
+    end if
     if Intrinsics.hasIndex(@callable[0]) then
         intrinsicFn = @Intrinsics[@callable[0]][2]
         intrp[3] = @preIsInLoop
@@ -2532,6 +2540,7 @@ LoxCallableCall = function(callable, intrp, arguments)
         end for
         return intrinsicFn(@intrp, @arguments)
     end if
+    exit("LoxCallableCall: Unknown callable " + callable[0])
 end function
 // lox function
 // @declaration     function[1] FunctionStmt
@@ -3301,7 +3310,7 @@ IntrpVisitGetExpr = function(intrp, expr)
     if @object isa @RuntimeException then return @object
 
     if @object isa string then
-        if StrIntrs.hasIndex(@expr[2][1]) then
+        if hasIndex(@StrIntrs,@expr[2][1]) then
             strIntr = @StrIntrs[@expr[2][1]]
             if @strIntr[3] then 
                 ret = @strIntr[2]
@@ -3318,7 +3327,7 @@ IntrpVisitGetExpr = function(intrp, expr)
         // return @object[1][@expr[3][1]]
     end if
     if @object[0] == "LoxList" then
-        if ListIntrs.hasIndex(@expr[2][1]) then
+        if hasIndex(@ListIntrs, @expr[2][1]) then
             listIntr = @ListIntrs[@expr[2][1]]
             if @listIntr[3] then 
                 ret = @listIntr[2]
@@ -3331,7 +3340,7 @@ IntrpVisitGetExpr = function(intrp, expr)
         return NewRuntimeError(@expr[2], "List has no property '" + @expr[2][1] + "'.")
     end if
     if @object[0] == "LoxMap" then
-        if MapIntrs.hasIndex(@expr[2][1]) then
+        if hasIndex(@MapIntrs, @expr[2][1]) then
             mapIntr = @MapIntrs[@expr[2][1]]
             if @mapIntr[3] then 
                 ret = @mapIntr[2]
@@ -3843,6 +3852,6 @@ IntrpUnitTests = function
         "print f(1);",
         "print f(1, 2);",
     ]
-    runSource(lambda.join(char(10)))
+    runSource(swich.join(char(10)))
 end function
-IntrpUnitTests
+runPrompt
