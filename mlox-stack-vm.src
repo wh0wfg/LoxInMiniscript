@@ -1,0 +1,1233 @@
+DEBUG_PRINT_CODE = true
+DEBUG_TRACE_EXECUTION = false
+DEBUG_PRINT_TIMING = true
+
+OP_CONSTANT = 0
+OP_NIL = 1
+OP_TRUE = 2
+OP_FALSE = 3
+OP_POP = 15
+OP_GET_LOCAL = 19
+OP_SET_LOCAL = 20
+OP_GET_GLOBAL = 17
+OP_DEFINE_GLOBAL = 16
+OP_SET_GLOBAL = 18
+OP_EQUAL = 11
+OP_GREATER = 12
+OP_LESS = 13
+OP_ADD = 4
+OP_SUBTRACT = 5
+OP_MULTIPLY = 6
+OP_DIVIDE = 7
+OP_NOT = 10
+OP_NEGATE = 8
+OP_PRINT = 14
+OP_JUMP = 22
+OP_JUMP_IF_FALSE = 21
+OP_LOOP = 23
+OP_RETURN = 9
+
+disassembleChunk = function(insts, consts, lines, chunckName)
+    print("== " + chunckName + " ==")
+
+    offset = [0]
+    msg = ""    
+    while offset[0] < len(insts)
+        msg = msg + disassembleInstruction(insts, consts, lines, offset) + char(10)
+    end while
+    print(format_columns(msg))
+end function
+disassembleInstruction = function(insts, consts, lines, offsetHolder)
+    offset = offsetHolder[0]
+    msg = offset + " "
+
+    inst = insts[offset]
+    line = lines[offset]
+
+    if offset > 0 and line == lines[offset - 1] then
+        msg = msg + "| "
+    else
+        msg = msg + line + " "
+    end if
+
+    if inst == OP_CONSTANT then
+        constAddr = insts[offset + 1]
+        msg = msg + "OP_CONSTANT " + constAddr + " '" + consts[constAddr] + "'"
+        offsetHolder[0] = offsetHolder[0] + 2
+    else if inst == OP_NIL then
+        msg = msg + "OP_NIL"
+        offsetHolder[0] = offsetHolder[0] + 1
+    else if inst == OP_TRUE then
+        msg = msg + "OP_TRUE"
+        offsetHolder[0] = offsetHolder[0] + 1
+    else if inst == OP_FALSE then
+        msg = msg + "OP_FALSE"
+        offsetHolder[0] = offsetHolder[0] + 1
+    else if inst == OP_POP then
+        msg = msg + "OP_POP"
+        offsetHolder[0] = offsetHolder[0] + 1
+    else if inst == OP_GET_LOCAL then
+        slot = insts[offset + 1]
+        msg = msg + "OP_GET_LOCAL " + slot
+        offsetHolder[0] = offsetHolder[0] + 2
+    else if inst == OP_SET_LOCAL then
+        slot = insts[offset + 1]
+        msg = msg + "OP_SET_LOCAL " + slot
+        offsetHolder[0] = offsetHolder[0] + 2
+    else if inst == OP_GET_GLOBAL then
+        constAddr = insts[offset + 1]
+        msg = msg + "OP_GET_GLOBAL " + constAddr + " '" + consts[constAddr] + "'"
+        offsetHolder[0] = offsetHolder[0] + 2
+    else if inst == OP_DEFINE_GLOBAL then
+        constAddr = insts[offset + 1]
+        msg = msg + "OP_DEFINE_GLOBAL " + constAddr + " '" + consts[constAddr] + "'"
+        offsetHolder[0] = offsetHolder[0] + 2
+    else if inst == OP_SET_GLOBAL then
+        constAddr = insts[offset + 1]
+        msg = msg + "OP_SET_GLOBAL " + constAddr + " '" + consts[constAddr] + "'"
+        offsetHolder[0] = offsetHolder[0] + 2
+    else if inst == OP_EQUAL then
+        msg = msg + "OP_EQUAL"
+        offsetHolder[0] = offsetHolder[0] + 1
+    else if inst == OP_GREATER then
+        msg = msg + "OP_GREATER"
+        offsetHolder[0] = offsetHolder[0] + 1
+    else if inst == OP_LESS then
+        msg = msg + "OP_LESS"
+        offsetHolder[0] = offsetHolder[0] + 1
+    else if inst == OP_ADD then
+        msg = msg + "OP_ADD"
+        offsetHolder[0] = offsetHolder[0] + 1
+    else if inst == OP_SUBTRACT then
+        msg = msg + "OP_SUBTRACT"
+        offsetHolder[0] = offsetHolder[0] + 1
+    else if inst == OP_MULTIPLY then
+        msg = msg + "OP_MULTIPLY"
+        offsetHolder[0] = offsetHolder[0] + 1
+    else if inst == OP_DIVIDE then
+        msg = msg + "OP_DIVIDE"
+        offsetHolder[0] = offsetHolder[0] + 1
+    else if inst == OP_NOT then
+        msg = msg + "OP_NOT"
+        offsetHolder[0] = offsetHolder[0] + 1   
+    else if inst == OP_NEGATE then
+        msg = msg + "OP_NEGATE"
+        offsetHolder[0] = offsetHolder[0] + 1
+    else if inst == OP_PRINT then
+        msg = msg + "OP_PRINT"
+        offsetHolder[0] = offsetHolder[0] + 1
+    else if inst == OP_JUMP then
+        jump = bitOr(bitwise("<<", insts[offset + 1], 8), insts[offset + 2])
+        msg = msg + "OP_JUMP " + offset + " -> " + (offset + 3 + jump)
+        offsetHolder[0] = offsetHolder[0] + 3
+    else if inst == OP_JUMP_IF_FALSE then
+        jump = bitOr(bitwise("<<", insts[offset + 1], 8), insts[offset + 2])
+        msg = msg + "OP_JUMP_IF_FALSE " + offset + " -> " + (offset + 3 + jump)
+        offsetHolder[0] = offsetHolder[0] + 3
+    else if inst == OP_LOOP then
+        jump = bitOr(bitwise("<<", insts[offset + 1], 8), insts[offset + 2])
+        msg = msg + "OP_LOOP " + offset + " -> " + (offset - jump)
+        offsetHolder[0] = offsetHolder[0] + 3
+    else if inst == OP_RETURN then
+        msg = msg + "OP_RETURN"
+        offsetHolder[0] = offsetHolder[0] + 1
+    else
+        msg = msg + "Unknown opcode " + inst
+        offsetHolder[0] = offsetHolder[0] + 1
+    end if
+    return msg
+end function
+
+INTERPRET_OK = 0
+INTERPRET_COMPILE_ERROR = 1
+INTERPRET_RUNTIME_ERROR = 2
+VM = {
+    "insts": [],
+    "consts": [],
+    "lines": [],
+    "stack": [],
+    "pc": 0,
+    "globals": {},
+}
+VM.peek = function(distance)
+    return self.stack[len(self.stack) - 1 - distance]
+end function
+VM.run = function()
+    while true
+        if DEBUG_TRACE_EXECUTION then
+            print(self.stack)
+            print(disassembleInstruction(self.insts, self.consts, self.lines, [self.pc]))
+        end if
+
+        inst = self.insts[self.pc] 
+        self.pc = self.pc + 1
+
+        if inst == OP_CONSTANT then
+            const = self.consts[self.insts[self.pc]]
+            self.pc = self.pc + 1
+            self.stack.push(const)
+        else if inst == OP_NIL then
+            self.stack.push(null)
+        else if inst == OP_TRUE then
+            self.stack.push(BOOL_VAL(true))
+        else if inst == OP_FALSE then
+            self.stack.push(BOOL_VAL(false))
+        else if inst == OP_POP then
+            self.stack.pop()
+        else if inst == OP_GET_LOCAL then
+            slot = self.insts[self.pc]
+            self.pc = self.pc + 1
+            self.stack.push(self.stack[slot])
+        else if inst == OP_SET_LOCAL then
+            slot = self.insts[self.pc]
+            self.pc = self.pc + 1
+            self.stack[slot] = self.peek(0)
+        else if inst == OP_GET_GLOBAL then
+            valName = self.consts[self.insts[self.pc]]
+            self.pc = self.pc + 1
+            if not self.globals.hasIndex(valName) then
+                runtimeError("Undefined variable '" + valName + "'.", self.lines, self.pc)
+                return INTERPRET_RUNTIME_ERROR
+            end if
+            self.stack.push(self.globals[valName])
+        else if inst == OP_DEFINE_GLOBAL then
+            valName = self.consts[self.insts[self.pc]]
+            self.pc = self.pc + 1
+            self.globals[valName] = self.stack.pop()
+        else if inst == OP_SET_GLOBAL then
+            valName = self.consts[self.insts[self.pc]]
+            self.pc = self.pc + 1
+            if not self.globals.hasIndex(valName)  then
+                runtimeError("Undefined variable '" + valName + "'.", self.lines, self.pc)
+                return INTERPRET_RUNTIME_ERROR
+            end if
+            self.globals[valName] = self.peek(0)
+        else if inst == OP_EQUAL then
+            b = self.stack.pop()
+            a = self.stack.pop()
+            self.stack.push(BOOL_VAL(valuesEqual(a, b)))
+        else if inst == OP_GREATER then
+            if not typeof(self.peek(0)) == "number" or not typeof(self.peek(1)) == "number" then
+                runtimeError("Operands must be numbers.", self.lines, self.pc)
+                return INTERPRET_RUNTIME_ERROR
+            end if
+            b = self.stack.pop()
+            a = self.stack.pop()
+            self.stack.push(BOOL_VAL(a > b))
+        else if inst == OP_LESS then
+            if not typeof(self.peek(0)) == "number" or not typeof(self.peek(1)) == "number" then
+                runtimeError("Operands must be numbers.", self.lines, self.pc)
+                return INTERPRET_RUNTIME_ERROR
+            end if
+            b = self.stack.pop()
+            a = self.stack.pop()
+            self.stack.push(BOOL_VAL(a < b))
+        else if inst == OP_ADD then
+            if typeof(self.peek(0)) == "string" and typeof(self.peek(1)) == "string" or typeof(self.peek(0)) == "number" or not typeof(self.peek(1)) == "number" then
+                b = self.stack.pop()
+                a = self.stack.pop()
+                self.stack.push(a + b)
+            else 
+                runtimeError("Operands must be numbers.", self.lines, self.pc)
+                return INTERPRET_RUNTIME_ERROR
+            end if
+        else if inst == OP_SUBTRACT then
+            if not typeof(self.peek(0)) == "number" or not typeof(self.peek(1)) == "number" then
+                runtimeError("Operands must be numbers.", self.lines, self.pc)
+                return INTERPRET_RUNTIME_ERROR
+            end if
+            b = self.stack.pop()
+            a = self.stack.pop()
+            self.stack.push(a - b)
+        else if inst == OP_MULTIPLY then
+            if not typeof(self.peek(0)) == "number" or not typeof(self.peek(1)) == "number" then
+                runtimeError("Operands must be numbers.", self.lines, self.pc)
+                return INTERPRET_RUNTIME_ERROR
+            end if
+            self.stack.push(self.stack.pop() * self.stack.pop()) 
+        else if inst == OP_DIVIDE then
+            if not typeof(self.peek(0)) == "number" or not typeof(self.peek(1)) == "number" then
+                runtimeError("Operands must be numbers.", self.lines, self.pc)
+                return INTERPRET_RUNTIME_ERROR
+            end if
+            b = self.stack.pop()
+            a = self.stack.pop()
+            self.stack.push(a / b)
+        else if inst == OP_NOT then
+            value = self.stack.pop()
+            self.stack.push(BOOL_VAL(isFalsey(value)))
+        else if inst == OP_NEGATE then
+            if not typeof(self.peek(0)) == "number" then
+                runtimeError("Operand must be a number.", self.lines, self.pc)
+                return INTERPRET_RUNTIME_ERROR
+            end if
+            self.stack.push(-self.stack.pop()) 
+        else if inst == OP_PRINT then
+            printValue(self.stack.pop())
+        else if inst == OP_JUMP then
+            offset = bitOr(bitwise("<<", self.insts[self.pc], 8), self.insts[self.pc + 1])
+            self.pc = self.pc + offset + 2
+        else if inst == OP_JUMP_IF_FALSE then
+            offset = bitOr(bitwise("<<", self.insts[self.pc], 8), self.insts[self.pc + 1])
+            if isFalsey(self.peek(0)) then
+                self.pc = self.pc + offset
+            end if
+            self.pc = self.pc + 2
+        else if inst == OP_LOOP then
+            offset = bitOr(bitwise("<<", self.insts[self.pc], 8), self.insts[self.pc + 1])
+            self.pc = self.pc - offset + 2
+        else if inst == OP_RETURN then
+            return INTERPRET_OK
+        end if
+    end while
+end function
+valuesEqual = function(a, b)
+    if typeof(a) != typeof(b) then
+        return false
+    end if
+
+    if typeof(a) == "number" then
+        return a == b
+    else if typeof(a) == "string" then
+        return a == b
+    else if a isa Boolean then
+        return AS_BOOL(a) == AS_BOOL(b)
+    else if a == null then
+        return true
+    end if
+
+    return false
+end function
+isFalsey = function(value)
+    return value == null or (value isa Boolean and not AS_BOOL(value))
+end function
+printValue = function(value)
+    if typeof(value) == "number" then
+        print(value)
+    else if typeof(value) == "string" then
+        print(value)
+    else if value isa Boolean then
+        if AS_BOOL(value) then
+            print("true")
+        else
+            print("false")
+        end if
+    else if value == null then
+        print("nil")
+    else
+        print("Unknown value type")
+    end if
+end function
+runtimeError = function(message, lines, pc)
+    print("<color=red>" + message + "</color>")
+    instruction = pc - 1
+    line = lines[instruction]
+    print("<color=red>[line " + line + "] in script</color>")
+end function
+// === BEGIN Lexer ===
+TOKEN_LEFT_PAREN = "("
+TOKEN_RIGHT_PAREN = ")"
+TOKEN_LEFT_BRACE = "{"
+TOKEN_RIGHT_BRACE = "}"
+TOKEN_COMMA = ","
+TOKEN_DOT = "."
+TOKEN_MINUS = "-"
+TOKEN_PLUS = "+"
+TOKEN_SEMICOLON = ";"
+TOKEN_SLASH = "/"
+TOKEN_STAR = "*"
+TOKEN_BANG = "!"
+TOKEN_BANG_EQUAL = "!="
+TOKEN_EQUAL = "="
+TOKEN_EQUAL_EQUAL = "=="
+TOKEN_GREATER = ">"
+TOKEN_GREATER_EQUAL = ">="
+TOKEN_LESS = "<"
+TOKEN_LESS_EQUAL = "<="
+TOKEN_IDENTIFIER = "identifier"
+TOKEN_STRING = "string"
+TOKEN_NUMBER = "number"
+TOKEN_AND = "and"
+TOKEN_CLASS = "class"
+TOKEN_ELSE = "else"
+TOKEN_FALSE = "false"
+TOKEN_FOR = "for"
+TOKEN_FUN = "fun"
+TOKEN_IF = "if"
+TOKEN_NIL = "nil"
+TOKEN_OR = "or"
+TOKEN_PRINT = "print"
+TOKEN_RETURN = "return"
+TOKEN_SUPER = "super"
+TOKEN_THIS = "this"
+TOKEN_TRUE = "true"
+TOKEN_VAR = "var"
+TOKEN_WHILE = "while"
+TOKEN_ERROR = "error"
+TOKEN_EOF = "eof"
+Token = {
+    "type": TOKEN_EOF,
+    "lexeme": "",
+    "line": 1,
+}
+Scanner = {
+    "source": "",
+    "start": 0,
+    "current": 0,
+    "line": 1,
+}
+Scanner.isAtEnd = function()
+    return self.current >= len(self.source)
+end function
+Scanner.makeToken = function(tokenType)
+    token = new Token
+    token.type = tokenType
+    token.lexeme = self.source[self.start: self.current]
+    token.line = self.line
+    return token
+end function
+Scanner.errorToken = function(message)
+    token = new Token
+    token.type = TOKEN_ERROR
+    token.lexeme = message
+    token.line = self.line
+    return token
+end function
+Scanner.advance = function()
+    c = self.source[self.current]
+    self.current = self.current + 1
+    return c
+end function
+Scanner.match = function(expected)
+    if self.isAtEnd() then
+        return false
+    end if
+    if self.source[self.current] != expected then
+        return false
+    end if
+    self.current = self.current + 1
+    return true
+end function
+Scanner.peek = function()
+    if self.isAtEnd() then
+        return char(0)
+    end if
+    return self.source[self.current]
+end function
+Scanner.peekNext = function()
+    if self.isAtEnd() then
+        return char(0)
+    end if
+    return self.source[self.current + 1]
+end function
+Scanner.skipWhitespace = function()
+    while true
+        c = self.peek()
+        if c == char(32) or c == char(13) or c == char(9) then
+            self.advance()
+        else if c == char(10) then
+            self.line = self.line + 1
+            self.advance()
+        else if c == "/" then
+            if self.peekNext() == "/" then
+                while self.peek() != char(10) and not self.isAtEnd()
+                    self.advance()
+                end while
+            else
+                return 
+            end if
+        else
+            return 
+        end if
+    end while
+end function
+Scanner.string = function()
+    while self.peek() != """" and not self.isAtEnd()
+        if self.peek() == char(10) then
+            self.line = self.line + 1
+        end if
+        self.advance()
+    end while
+
+    if self.isAtEnd() then
+        return self.errorToken("Unterminated string.")
+    end if
+
+    self.advance()
+    return self.makeToken(TOKEN_STRING)
+end function
+Scanner.isDigit = function(c)
+    return c >= "0" and c <= "9"
+end function
+Scanner.number = function()
+    while self.isDigit(self.peek())
+        self.advance()
+    end while
+
+    if self.peek() == "." and self.isDigit(self.peekNext()) then
+        self.advance()
+
+        while self.isDigit(self.peek())
+            self.advance()
+        end while
+    end if
+
+    return self.makeToken(TOKEN_NUMBER)
+end function
+Scanner.isAlpha = function(c)
+    return (c >= "a" and c <= "z") or (c >= "A" and c <= "Z") or c == "_"
+end function
+Scanner.identifierType = function()
+    text = self.source[self.start: self.current]
+    if text == "and" then
+        return TOKEN_AND
+    else if text == "class" then
+        return TOKEN_CLASS
+    else if text == "else" then
+        return TOKEN_ELSE
+    else if text == "false" then
+        return TOKEN_FALSE
+    else if text == "for" then
+        return TOKEN_FOR
+    else if text == "fun" then
+        return TOKEN_FUN
+    else if text == "if" then
+        return TOKEN_IF
+    else if text == "nil" then
+        return TOKEN_NIL
+    else if text == "or" then
+        return TOKEN_OR
+    else if text == "print" then
+        return TOKEN_PRINT
+    else if text == "return" then
+        return TOKEN_RETURN
+    else if text == "super" then
+        return TOKEN_SUPER
+    else if text == "this" then
+        return TOKEN_THIS
+    else if text == "true" then
+        return TOKEN_TRUE
+    else if text == "var" then
+        return TOKEN_VAR
+    else if text == "while" then
+        return TOKEN_WHILE
+    end if
+
+    return TOKEN_IDENTIFIER
+end function
+Scanner.identifier = function()
+    while self.isAlpha(self.peek()) or self.isDigit(self.peek())
+        self.advance()
+    end while
+
+    return self.makeToken(self.identifierType())
+end function
+Scanner.scanToken = function()
+    self.skipWhitespace()
+    self.start = self.current
+    if self.isAtEnd() then
+        return self.makeToken(TOKEN_EOF)
+    end if
+
+    c = self.advance()
+    if self.isAlpha(c) then 
+        return self.identifier()
+    end if
+    if self.isDigit(c) then 
+        return self.number()
+    end if
+
+    if c == "(" then
+        return self.makeToken(TOKEN_LEFT_PAREN)
+    else if c == ")" then
+        return self.makeToken(TOKEN_RIGHT_PAREN)
+    else if c == "{" then
+        return self.makeToken(TOKEN_LEFT_BRACE)
+    else if c == "}" then
+        return self.makeToken(TOKEN_RIGHT_BRACE)
+    else if c == ";" then
+        return self.makeToken(TOKEN_SEMICOLON)
+    else if c == "," then
+        return self.makeToken(TOKEN_COMMA)
+    else if c == "." then
+        return self.makeToken(TOKEN_DOT)
+    else if c == "-" then
+        return self.makeToken(TOKEN_MINUS)
+    else if c == "+" then
+        return self.makeToken(TOKEN_PLUS)
+    else if c == "/" then
+        return self.makeToken(TOKEN_SLASH)
+    else if c == "*" then
+        return self.makeToken(TOKEN_STAR)
+    else if c == "!" then
+        if self.match("=") then
+            return self.makeToken(TOKEN_BANG_EQUAL)
+        else
+            return self.makeToken(TOKEN_BANG)
+        end if
+    else if c == "=" then
+        if self.match("=") then
+            return self.makeToken(TOKEN_EQUAL_EQUAL)
+        else
+            return self.makeToken(TOKEN_EQUAL)
+        end if
+    else if c == "<" then
+        if self.match("=") then
+            return self.makeToken(TOKEN_LESS_EQUAL)
+        else
+            return self.makeToken(TOKEN_LESS)
+        end if
+    else if c == ">" then
+        if self.match("=") then
+            return self.makeToken(TOKEN_GREATER_EQUAL)
+        else
+            return self.makeToken(TOKEN_GREATER)
+        end if
+    else if c == """" then
+        return self.string()
+    end if
+
+    return self.errorToken("Unexpected character.")
+end function
+// === END Lexer ===
+Boolean = {
+    "value": false,
+}
+AS_BOOL = function(b)
+    return b.value
+end function
+BOOL_VAL = function(value)
+    b = new Boolean
+    b.value = value
+    return b
+end function
+Function = {
+    "name": "",
+    "arity": 0,
+    "insts": [],
+    "consts": [],
+    "lines": [],
+}
+// === BEGIN Parser ===
+PREC_NONE = 0
+PREC_ASSIGNMENT = 1
+PREC_OR = 2
+PREC_AND = 3
+PREC_EQUALITY = 4
+PREC_COMPARISON = 5
+PREC_TERM = 6
+PREC_FACTOR = 7
+PREC_UNARY = 8
+PREC_CALL = 9
+PREC_PRIMARY = 10
+Parser = {
+    "current": null,
+    "previous": null,
+    "hadError": false,
+    "panicMode": false,
+    "scanner": null,
+    "insts": null,
+    "consts": null,
+    "lines": null,
+    "locals": [],
+    "scopeDepth": 0,
+}
+Parser.errorAtCurrent = function(message)
+    self.errorAt(self.current, message)
+end function
+Parser.error = function(message)
+    self.errorAt(self.previous, message)
+end function
+Parser.errorAt = function(token, message)
+    if self.panicMode then
+        return 
+    end if
+    self.panicMode = true
+    if token.type == TOKEN_EOF then
+        print("<color=red>[line " + token.line + "] Error at end: " + message + "</color>")
+    else
+        print("<color=red>[line " + token.line + "] Error at '" + token.lexeme + "': " + message + "</color>")
+    end if
+end function
+Parser.advance = function()
+    self.previous = self.current
+    
+    while true
+        self.current = self.scanner.scanToken()
+        if self.current.type != TOKEN_ERROR then
+            break
+        end if
+        self.errorAtCurrent(self.current.lexeme)
+    end while
+end function
+Parser.consume = function(tokenType, message)
+    if self.current.type == tokenType then
+        self.advance()
+        return 
+    end if
+    self.errorAtCurrent(message)
+end function
+Parser.emitByte = function(byte)
+    self.insts.push(byte)
+    self.lines.push(self.previous.line)
+end function
+Parser.emitLoop = function(loopStart)
+    self.emitByte(OP_LOOP)
+
+    offset = len(self.insts) - loopStart + 2
+    if offset > 65535 then
+        self.error("Loop body too large.")
+    end if
+
+    self.emitByte(bitAnd(bitwise(">>", offset, 8), 255))
+    self.emitByte(bitAnd(offset, 255))
+end function
+Parser.emitJump = function(instruction)
+    self.emitByte(instruction)
+    self.emitByte(255)
+    self.emitByte(255)
+    return len(self.insts) - 2
+end function
+Parser.patchJump = function(offset)
+    jump = len(self.insts) - offset - 2
+
+    if jump > 255 then
+        self.error("Too much code to jump over.")
+    end if
+
+    self.insts[offset] = bitAnd(bitwise(">>", jump, 8), 255)
+    self.insts[offset + 1] = bitAnd(jump, 255)
+end function
+Parser.emitReturn = function()
+    self.emitByte(OP_RETURN)
+end function
+Parser.emitBytes = function(byte1, byte2)
+    self.emitByte(byte1)
+    self.emitByte(byte2)
+end function
+Parser.endCompiler = function()
+    self.emitReturn()
+    if DEBUG_PRINT_CODE then
+        if not self.hadError then
+            disassembleChunk(self.insts, self.consts, self.lines, "code")
+        end if
+    end if
+end function
+Parser.makeConstant = function(value)
+    self.consts.push(value)
+    return len(self.consts) - 1
+end function
+Parser.emitConstant = function(value)
+    self.emitBytes(OP_CONSTANT, self.makeConstant(value))
+end function
+Parser.number = function(canAssign)
+    value = val(self.previous.lexeme)
+    self.emitConstant(value)
+end function
+Parser["or"] = function(canAssign)
+    elseJump = self.emitJump(OP_JUMP_IF_FALSE)
+    endJump = self.emitJump(OP_JUMP)
+
+    self.patchJump(elseJump)
+    self.emitByte(OP_POP)
+
+    self.parsePrecedence(PREC_OR)
+    self.patchJump(endJump)
+end function
+Parser["and"] = function(canAssign)
+    endJump = self.emitJump(OP_JUMP_IF_FALSE)
+
+    self.emitByte(OP_POP)
+    self.parsePrecedence(PREC_AND)
+
+    self.patchJump(endJump)
+end function
+Parser.string = function(canAssign)
+    value = self.previous.lexeme[1: len(self.previous.lexeme) - 1]
+    self.emitConstant(value)
+end function
+Parser.variable = function(canAssign)
+    self.namedVariable(self.previous.lexeme, canAssign)
+end function
+Parser.namedVariable = function(varName, canAssign)
+    arg = self.resolveLocal(varName)
+    if arg != -1 then
+        getOp = OP_GET_LOCAL
+        setOp = OP_SET_LOCAL
+    else
+        arg = self.identifierConstant(varName)
+        getOp = OP_GET_GLOBAL
+        setOp = OP_SET_GLOBAL
+    end if
+
+    if canAssign and self.match(TOKEN_EQUAL) then
+        self.expression()
+        self.emitBytes(setOp, arg)
+    else
+        self.emitBytes(getOp, arg)
+    end if
+end function
+Parser.resolveLocal = function(varName)
+    for i in range(len(self.locals) - 1, 0, -1)
+        local = self.locals[i]
+        if local.name == varName then
+            if local.depth == -1 then
+                self.error("Can't read local variable in its own initializer.")
+            end if
+            return i
+        end if
+    end for
+
+    return -1
+end function
+Parser.grouping = function(canAssign)
+    self.expression()
+    self.consume(TOKEN_RIGHT_PAREN, "Expect ')' after expression.")
+end function
+Parser.unary = function(canAssign)
+    operatorType = self.previous.type
+
+    self.parsePrecedence(PREC_UNARY)
+
+    if operatorType == TOKEN_MINUS then
+        self.emitByte(OP_NEGATE)
+    else if operatorType == TOKEN_BANG then
+        self.emitByte(OP_NOT)
+    end if
+end function
+Parser.binary = function(canAssign)
+    operatorType = self.previous.type
+    rule = self.getRule(operatorType)
+    self.parsePrecedence(rule.precedence + 1)
+
+    if operatorType == TOKEN_BANG_EQUAL then
+        self.emitBytes(OP_EQUAL, OP_NOT)
+    else if operatorType == TOKEN_EQUAL_EQUAL then
+        self.emitByte(OP_EQUAL)
+    else if operatorType == TOKEN_GREATER then
+        self.emitByte(OP_GREATER)
+    else if operatorType == TOKEN_GREATER_EQUAL then
+        self.emitBytes(OP_LESS, OP_NOT)
+    else if operatorType == TOKEN_LESS then
+        self.emitByte(OP_LESS)
+    else if operatorType == TOKEN_LESS_EQUAL then
+        self.emitBytes(OP_GREATER, OP_NOT)
+    else if operatorType == TOKEN_PLUS then
+        self.emitByte(OP_ADD)
+    else if operatorType == TOKEN_MINUS then
+        self.emitByte(OP_SUBTRACT)
+    else if operatorType == TOKEN_STAR then
+        self.emitByte(OP_MULTIPLY)
+    else if operatorType == TOKEN_SLASH then
+        self.emitByte(OP_DIVIDE)
+    end if
+end function
+Parser.expression = function()
+    self.parsePrecedence(PREC_ASSIGNMENT)
+end function
+Parser.declaration = function()
+    if self.match(TOKEN_VAR) then
+        self.varDeclaration()
+    else
+        self.statement()
+    end if
+
+    if self.panicMode then
+        self.synchronize()
+    end if
+end function
+Parser.declareVariable = function()
+    if self.scopeDepth == 0 then
+        return 
+    end if
+
+    valName = self.previous.lexeme
+
+    for i in range(len(self.locals) - 1, 0, -1)
+        local = self.locals[i]
+        if local.depth != -1 and local.depth < self.scopeDepth then
+            break
+        end if
+
+        if local.name == valName then
+            self.error("Already a variable with this name in this scope.")
+        end if
+    end for
+
+    self.addLocal(valName)
+end function
+Parser.addLocal = function(varName)
+    if len(self.locals) == 256 then
+        self.error("Too many local variables in function.")
+        return 
+    end if
+
+    self.locals.push({
+        "name": varName,
+        "depth": -1,
+    })
+end function
+Parser.parseVariable = function(errorMessage)
+    self.consume(TOKEN_IDENTIFIER, errorMessage)
+
+    self.declareVariable()
+    if self.scopeDepth > 0 then
+        return 0
+    end if
+
+    return self.identifierConstant(self.previous.lexeme)
+end function
+Parser.identifierConstant = function(varName)
+    return self.makeConstant(varName)
+end function
+Parser.markInitialized = function()
+    self.locals[len(self.locals) - 1].depth = self.scopeDepth
+end function
+Parser.defineVariable = function(global)
+    if self.scopeDepth > 0 then
+        self.markInitialized()
+        return 
+    end if
+
+    self.emitBytes(OP_DEFINE_GLOBAL, global)
+end function
+Parser.varDeclaration = function()
+    global = self.parseVariable("Expect variable name.")
+
+    if self.match(TOKEN_EQUAL) then
+        self.expression()
+    else
+        self.emitByte(OP_NIL)
+    end if
+
+    self.consume(TOKEN_SEMICOLON, "Expect ';' after variable declaration.")
+    self.defineVariable(global)
+end function
+Parser.synchronize = function()
+    self.panicMode = false
+
+    while self.current.type != TOKEN_EOF
+        if self.previous.type == TOKEN_SEMICOLON then
+            return 
+        end if
+
+        switchType = self.current.type
+        if switchType == TOKEN_CLASS or switchType == TOKEN_FUN or switchType == TOKEN_VAR or switchType == TOKEN_FOR or switchType == TOKEN_IF or switchType == TOKEN_WHILE or switchType == TOKEN_PRINT or switchType == TOKEN_RETURN then
+            return 
+        end if
+
+        self.advance()
+    end while
+end function
+Parser.beginScope = function()
+    self.scopeDepth = self.scopeDepth + 1
+end function
+Parser.endScope = function()
+    self.scopeDepth = self.scopeDepth - 1
+
+    while len(self.locals) > 0 and self.locals[-1].depth > self.scopeDepth
+        self.emitByte(OP_POP)
+        self.locals.pop()
+    end while
+end function
+Parser.whileStatement = function()
+    loopStart = len(self.insts)
+    self.consume(TOKEN_LEFT_PAREN, "Expect '(' after 'while'.")
+    self.expression()
+    self.consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.")
+
+    exitJump = self.emitJump(OP_JUMP_IF_FALSE)
+    self.emitByte(OP_POP)
+    self.statement()
+    self.emitLoop(loopStart)
+
+    self.patchJump(exitJump)
+    self.emitByte(OP_POP)
+end function
+Parser.forStatement = function()
+    self.beginScope()
+    self.consume(TOKEN_LEFT_PAREN, "Expect '(' after 'for'.")
+    if self.match(TOKEN_SEMICOLON) then
+    else if self.match(TOKEN_VAR) then
+        self.varDeclaration()
+    else
+        self.expressionStatement()
+    end if
+
+    loopStart = len(self.insts)
+    exitJump = -1
+    if not self.match(TOKEN_SEMICOLON) then
+        self.expression()
+        self.consume(TOKEN_SEMICOLON, "Expect ';' after loop condition.")
+        
+        exitJump = self.emitJump(OP_JUMP_IF_FALSE)
+        self.emitByte(OP_POP)
+    end if
+
+    
+    if not self.match(TOKEN_RIGHT_PAREN) then
+        bodyJump = self.emitJump(OP_JUMP)
+        incrementStart = len(self.insts)
+        self.expression()
+        self.emitByte(OP_POP)
+        self.consume(TOKEN_RIGHT_PAREN, "Expect ')' after for clauses.")
+
+        self.emitLoop(loopStart)
+        loopStart = incrementStart
+        self.patchJump(bodyJump)
+    end if
+
+    self.statement()
+    self.emitLoop(loopStart)
+
+    if exitJump != -1 then
+        self.patchJump(exitJump)
+        self.emitByte(OP_POP)
+    end if
+
+    self.endScope()
+end function
+Parser.statement = function()
+    if self.match(TOKEN_PRINT) then
+        self.printStatement()
+    else if self.match(TOKEN_FOR) then
+        self.forStatement()
+    else if self.match(TOKEN_IF) then
+        self.ifStatement()
+    else if self.match(TOKEN_WHILE) then
+        self.whileStatement()
+    else if self.match(TOKEN_LEFT_BRACE) then
+        self.beginScope()
+        self.block()
+        self.endScope()
+    else
+        self.expressionStatement()
+    end if
+end function
+Parser.block = function()
+    while not self.check(TOKEN_RIGHT_BRACE) and not self.check(TOKEN_EOF)
+        self.declaration()
+    end while
+
+    self.consume(TOKEN_RIGHT_BRACE, "Expect '}' after block.")
+end function
+Parser.expressionStatement = function()
+    self.expression()
+    self.consume(TOKEN_SEMICOLON, "Expect ';' after expression.")
+    self.emitByte(OP_POP)
+end function
+Parser.printStatement = function()
+    self.expression()
+    self.consume(TOKEN_SEMICOLON, "Expect ';' after value.")
+    self.emitByte(OP_PRINT)
+end function
+Parser.ifStatement = function()
+    self.consume(TOKEN_LEFT_PAREN, "Expect '(' after 'if'.")
+    self.expression()
+    self.consume(TOKEN_RIGHT_PAREN, "Expect ')' after condition.")
+
+    thenJump = self.emitJump(OP_JUMP_IF_FALSE)
+    self.emitByte(OP_POP)
+    self.statement()
+
+    elseJump = self.emitJump(OP_JUMP)
+
+    self.patchJump(thenJump)
+    self.emitByte(OP_POP)
+    
+    if self.match(TOKEN_ELSE) then
+        self.statement()
+    end if
+    self.patchJump(elseJump)
+end function
+Parser.literal = function(canAssign)
+    switchType = self.previous.type
+    if switchType == TOKEN_FALSE then
+        self.emitByte(OP_FALSE)
+    else if switchType == TOKEN_NIL then
+        self.emitByte(OP_NIL)
+    else if switchType == TOKEN_TRUE then
+        self.emitByte(OP_TRUE)
+    end if
+end function
+Parser.check = function(tokenType)
+    return self.current.type == tokenType
+end function
+Parser.match = function(tokenType)
+    if not self.check(tokenType) then
+        return false
+    end if
+    self.advance()
+    return true
+end function
+Parser.parsePrecedence = function(precedence)
+    self.advance()
+    prefixRule = self.getRule(self.previous.type).prefix
+
+    if prefixRule == null then
+        self.error("Expect expression.")
+        return 
+    end if
+
+    canAssign = precedence <= PREC_ASSIGNMENT
+    self[prefixRule](canAssign)
+    
+    while precedence <= self.getRule(self.current.type).precedence
+        self.advance()
+        infixRule = self.getRule(self.previous.type).infix
+        self[infixRule](canAssign)
+    end while
+
+    if canAssign and self.match(TOKEN_EQUAL) then
+        self.error("Invalid assignment target.")
+    end if
+end function
+Parser.getRule = function(tokenType)
+    return {
+        "prefix": self.RULES[tokenType][0],
+        "infix": self.RULES[tokenType][1],
+        "precedence": self.RULES[tokenType][2],
+    }
+end function
+// ParseRule = {
+//     "prefix": null, 0
+//     "infix": null, 1
+//     "precedence": PREC_NONE, 2
+// }
+Parser.RULES = {
+    TOKEN_LEFT_PAREN: ["grouping", null, PREC_NONE],
+    TOKEN_RIGHT_PAREN: [null, null, PREC_NONE],
+    TOKEN_LEFT_BRACE: [null, null, PREC_NONE],
+    TOKEN_RIGHT_BRACE: [null, null, PREC_NONE],
+    TOKEN_COMMA: [null, null, PREC_NONE],
+    TOKEN_DOT: [null, null, PREC_NONE],
+    TOKEN_MINUS: ["unary", "binary", PREC_TERM],
+    TOKEN_PLUS: [null, "binary", PREC_TERM],
+    TOKEN_SEMICOLON: [null, null, PREC_NONE],
+    TOKEN_SLASH: [null, "binary", PREC_FACTOR],
+    TOKEN_STAR: [null, "binary", PREC_FACTOR],
+    TOKEN_BANG: ["unary", null, PREC_NONE],
+    TOKEN_BANG_EQUAL: [null, "binary", PREC_EQUALITY],
+    TOKEN_EQUAL: [null, null, PREC_NONE],
+    TOKEN_EQUAL_EQUAL: [null, "binary", PREC_EQUALITY],
+    TOKEN_GREATER: [null, "binary", PREC_COMPARISON],
+    TOKEN_GREATER_EQUAL: [null, "binary", PREC_COMPARISON],
+    TOKEN_LESS: [null, "binary", PREC_COMPARISON],
+    TOKEN_LESS_EQUAL: [null, "binary", PREC_COMPARISON],
+    TOKEN_IDENTIFIER: ["variable", null, PREC_NONE],
+    TOKEN_STRING: ["string", null, PREC_NONE],
+    TOKEN_NUMBER: ["number", null, PREC_NONE],
+    TOKEN_AND: [null, "and", PREC_AND],
+    TOKEN_CLASS: [null, null, PREC_NONE],
+    TOKEN_ELSE: [null, null, PREC_NONE],
+    TOKEN_FALSE: ["literal", null, PREC_NONE],
+    TOKEN_FOR: [null, null, PREC_NONE],
+    TOKEN_FUN: [null, null, PREC_NONE],
+    TOKEN_IF: [null, null, PREC_NONE],
+    TOKEN_NIL: ["literal", null, PREC_NONE],
+    TOKEN_OR: [null, "or", PREC_NONE],
+    TOKEN_PRINT: [null, null, PREC_NONE],
+    TOKEN_RETURN: [null, null, PREC_NONE],
+    TOKEN_SUPER: [null, null, PREC_NONE],
+    TOKEN_THIS: [null, null, PREC_NONE],
+    TOKEN_TRUE: ["literal", null, PREC_NONE],
+    TOKEN_VAR: [null, null, PREC_NONE],
+    TOKEN_WHILE: [null, null, PREC_NONE],
+    TOKEN_ERROR: [null, null, PREC_NONE],
+    TOKEN_EOF: [null, null, PREC_NONE],
+}
+Local = {
+    "name": "",
+    "depth": 0,
+}
+VM.compile = function(source)
+    scanner = new Scanner
+    scanner.source = source
+
+    parser = new Parser
+    parser.scanner = scanner
+    parser.insts = self.insts
+    parser.consts = self.consts
+    parser.lines = self.lines
+
+    parser.advance()
+
+    while not parser.match(TOKEN_EOF)
+        parser.declaration()
+    end while
+
+    parser.endCompiler()
+    return not parser.hadError
+    // line = 0
+
+    // msg = ""
+    // while true
+    //     token = scanner.scanToken()
+    //     if token.line != line then
+    //         msg = msg + token.line + " "
+    //         line = token.line
+    //     else
+    //         msg = msg +  "| "
+    //     end if
+    //     msg = msg + token.type + " '" + token.lexeme + "'" + char(10)
+
+    //     if token.type == TOKEN_EOF then 
+    //         break
+    //     end if
+    // end while
+    // print(format_columns(msg))
+end function
+// === END Parser ===
+interpret = function(source)
+    vm = new VM
+
+    if not vm.compile(source) then
+        return INTERPRET_COMPILE_ERROR
+    end if
+    
+    startTime = time
+    result = vm.run()
+    endTime = time
+
+    if DEBUG_PRINT_TIMING then
+        print("Execution time: " + (endTime - startTime) + " seconds")
+    end if
+    return result
+end function
+repl = function
+    while true
+        line = user_input("> ")
+        interpret(line)
+    end while
+end function
+// insts = [
+//     OP_CONSTANT, 
+//     0,
+//     OP_CONSTANT,
+//     1,
+//     OP_ADD,
+//     OP_CONSTANT,
+//     2,
+//     OP_DIVIDE,
+//     OP_NEGATE,
+//     OP_RETURN,
+// ]
+// consts = [1.2, 3.4, 5.6]
+// lines = [123] * len(insts)
+// disassembleChunk(insts, consts, lines, "test_chunk")
+// run(insts, consts, lines, [], [0])
+s = "
+var a = 0;
+for (var i = 0; i < 10000; i = i + 1) {
+    a = a + i;
+}
+"
+st = time
+a = 0
+for i in range(100)
+	a = a + i
+end for 
+print a;
+et = time
+interpret(s)
+print "Native execution time: " + (et-st) + " seconds"
