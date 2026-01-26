@@ -9,6 +9,9 @@ To use extended features, such as list and map, check out the [extended](https:/
 
 For features based on greyscript extensions, check out the [greyscript-extended](https://github.com/wh0wfg/LoxInMiniscript.git) branch.
 
+Stack-based virtual machien implementation [mlox-stack-vm.src
+](https://github.com/wh0wfg/LoxInMiniscript/blob/main/mlox-stack-vm.src). (legacy; because of low perfermance improvment)
+
 ## **Benchmarks**
 
 **Note**: Benchmark parameters differ from official tests.
